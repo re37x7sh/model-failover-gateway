@@ -300,8 +300,16 @@ public class ProxyEngine : IProxyEngine
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.LogError(ex, "请求渠道 [{Label}] 发生网络异常，准备尝试下一个 Key 或渠道", channelLabel);
+                    _logger.LogError(ex, "请求渠道 [{Label}] 发生网络异常: {Message}", channelLabel, ex.Message);
                     lastErrorDetails = $"[{channelLabel}] 网络异常: {ex.Message}";
+
+                    // 如果已经开始向客户端流式输出响应体，无法在中断后再切换渠道或重设状态码
+                    if (context.Response.HasStarted)
+                    {
+                        _logger.LogWarning("流式响应在传输中途中断，因已向客户端发送数据，无法切换备用渠道");
+                        return;
+                    }
+
                     isFailoverOccurred = true;
                 }
             }
@@ -314,18 +322,21 @@ public class ProxyEngine : IProxyEngine
 
         // 9. 所有渠道均尝试失败
         stopwatch.Stop();
-        context.Response.StatusCode = StatusCodes.Status502BadGateway;
-        context.Response.ContentType = "application/json";
-        var failureResponse = JsonSerializer.Serialize(new
+        if (!context.Response.HasStarted)
         {
-            error = new
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            context.Response.ContentType = "application/json";
+            var failureResponse = JsonSerializer.Serialize(new
             {
-                message = "所有配置的可用上游渠道均尝试失败",
-                tried_channels = triedChannels,
-                last_error = lastErrorDetails
-            }
-        });
-        await context.Response.WriteAsync(failureResponse);
+                error = new
+                {
+                    message = "所有配置的可用上游渠道均尝试失败",
+                    tried_channels = triedChannels,
+                    last_error = lastErrorDetails
+                }
+            });
+            await context.Response.WriteAsync(failureResponse);
+        }
 
         _logService.AddLog(new ProxyLogEntry
         {
@@ -438,16 +449,23 @@ public class ProxyEngine : IProxyEngine
         var totalBytesTransferred = 0L;
         int bytesRead;
 
-        while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, context.RequestAborted)) > 0)
+        try
         {
-            await context.Response.Body.WriteAsync(buffer.AsMemory(0, bytesRead), context.RequestAborted);
-            totalBytesTransferred += bytesRead;
-
-            if (responseSampleBuilder.Length < 65536)
+            while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, context.RequestAborted)) > 0)
             {
-                var chunkText = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                responseSampleBuilder.Append(chunkText);
+                await context.Response.Body.WriteAsync(buffer.AsMemory(0, bytesRead), context.RequestAborted);
+                totalBytesTransferred += bytesRead;
+
+                if (responseSampleBuilder.Length < 65536)
+                {
+                    var chunkText = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    responseSampleBuilder.Append(chunkText);
+                }
             }
+        }
+        catch (Exception ex) when (ex is IOException or HttpRequestException or OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "渠道 [{Channel}] 流式响应在传输中途中断 (上游连接意外关闭/EOF): {Message}", channelName, ex.Message);
         }
 
         // 提取并在后台安全记录 Token
