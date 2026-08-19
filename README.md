@@ -25,6 +25,14 @@
 
 控制台地址：**`http://127.0.0.1:5000`**
 
+<img width="1311" height="744" alt="image" src="https://github.com/user-attachments/assets/460ab90f-3e6e-4f54-9504-b42a0ba77957" />
+
+<img width="1312" height="751" alt="image" src="https://github.com/user-attachments/assets/73d6b611-994c-426b-8477-9edfb29e145b" />
+
+<img width="623" height="875" alt="image" src="https://github.com/user-attachments/assets/2b45b901-f3ea-48e7-b935-10dd97b91a20" />
+
+<img width="1326" height="947" alt="image" src="https://github.com/user-attachments/assets/bc746907-608e-4b01-83c5-610515a4aa0c" />
+
 ---
 
 ## 🌟 核心特性与功能
