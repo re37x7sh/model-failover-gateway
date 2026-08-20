@@ -22,6 +22,8 @@ public class TrayIconManager : IDisposable
         _logger = logger;
     }
 
+    public bool IsNotificationEnabled { get; set; } = true;
+
     /// <summary>
     /// 启动系统托盘图标
     /// </summary>
@@ -50,7 +52,28 @@ public class TrayIconManager : IDisposable
                 };
 
                 var openDashboardItem = new ToolStripMenuItem("📊 打开 Web 控制台", null, (s, e) => OpenBrowser(_serverUrl));
-                var statusItem = new ToolStripMenuItem("🟢 状态: 运行中 (127.0.0.1:5000)") { Enabled = false };
+                var statusItem = new ToolStripMenuItem($"🟢 状态: 运行中 ({port})") { Enabled = false };
+
+                // 🔔 渠道异常通知开关菜单项
+                var toggleNotificationItem = new ToolStripMenuItem("🔔 渠道异常气泡通知 (已开启)")
+                {
+                    Checked = true,
+                    CheckOnClick = true
+                };
+
+                toggleNotificationItem.Click += (s, e) =>
+                {
+                    IsNotificationEnabled = toggleNotificationItem.Checked;
+                    if (IsNotificationEnabled)
+                    {
+                        toggleNotificationItem.Text = "🔔 渠道异常气泡通知 (已开启)";
+                        ShowBalloonNotification("通知已开启", "当渠道发生异常或欠费时将通过气泡提醒", ToolTipIcon.Info);
+                    }
+                    else
+                    {
+                        toggleNotificationItem.Text = "🔕 渠道异常气泡通知 (已关闭)";
+                    }
+                };
 
                 var copyClaudeItem = new ToolStripMenuItem("📋 复制 Claude 端点", null, (s, e) => SetClipboard($"{_serverUrl}/claude"));
                 var copyCodexItem = new ToolStripMenuItem("📋 复制 Codex 端点", null, (s, e) => SetClipboard($"{_serverUrl}/codex"));
@@ -67,6 +90,7 @@ public class TrayIconManager : IDisposable
                 contextMenu.Items.Add(statusItem);
                 contextMenu.Items.Add(new ToolStripSeparator());
                 contextMenu.Items.Add(openDashboardItem);
+                contextMenu.Items.Add(toggleNotificationItem);
                 contextMenu.Items.Add(new ToolStripSeparator());
                 contextMenu.Items.Add(copyClaudeItem);
                 contextMenu.Items.Add(copyCodexItem);
@@ -78,7 +102,7 @@ public class TrayIconManager : IDisposable
                 {
                     Icon = SystemIcons.Shield,
                     ContextMenuStrip = contextMenu,
-                    Text = "Model Failover Gateway (127.0.0.1:5000)",
+                    Text = $"Model Failover Gateway (127.0.0.1:{port})",
                     Visible = true
                 };
 
@@ -88,7 +112,7 @@ public class TrayIconManager : IDisposable
                 _notifyIcon.ShowBalloonTip(
                     2000,
                     "Model Failover Gateway",
-                    "本地智能故障转移网关已启动并在托盘常驻 (127.0.0.1:5000)",
+                    $"本地智能故障转移网关已启动并在托盘常驻 (127.0.0.1:{port})",
                     ToolTipIcon.Info
                 );
 
@@ -131,6 +155,12 @@ public class TrayIconManager : IDisposable
     /// </summary>
     public void ShowBalloonNotification(string title, string text, ToolTipIcon icon = ToolTipIcon.Warning)
     {
+        // 若用户已手动关闭气泡通知，且非重要系统提示则直接跳过
+        if (!IsNotificationEnabled && icon != ToolTipIcon.Info)
+        {
+            return;
+        }
+
         try
         {
             if (_notifyIcon != null && _notifyIcon.Visible)
