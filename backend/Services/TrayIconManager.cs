@@ -126,6 +126,24 @@ public class TrayIconManager : IDisposable
         catch { }
     }
 
+    /// <summary>
+    /// 在 Windows 系统托盘弹出告警气泡通知
+    /// </summary>
+    public void ShowBalloonNotification(string title, string text, ToolTipIcon icon = ToolTipIcon.Warning)
+    {
+        try
+        {
+            if (_notifyIcon != null && _notifyIcon.Visible)
+            {
+                _notifyIcon.ShowBalloonTip(4000, title, text, icon);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "发送系统托盘告警通知失败");
+        }
+    }
+
     public void Dispose()
     {
         if (_notifyIcon != null)

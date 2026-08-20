@@ -143,6 +143,16 @@ export const messages = {
       notInjectedBadge: '未接管',
       savedSuccess: '设置已生效',
       customProvider: '自定义 TOML Provider 名称'
+    },
+    // 渠道异常通知
+    alerts: {
+      title: '渠道异常通知',
+      clearAll: '一键清空',
+      empty: '当前所有渠道运行健康，暂无异常告警',
+      dismiss: '关闭通知',
+      dismissAll: '一键全部忽略',
+      autoSwitched: '已自动切换备用渠道',
+      occurredTimes: '连续发生'
     }
   },
   en: {
@@ -275,6 +285,16 @@ export const messages = {
       notInjectedBadge: 'Inactive',
       savedSuccess: 'Settings applied successfully',
       customProvider: 'Custom TOML Provider Name'
+    },
+    // Channel Alerts
+    alerts: {
+      title: 'Channel Alerts',
+      clearAll: 'Clear All',
+      empty: 'All channels are healthy, no active alerts.',
+      dismiss: 'Dismiss',
+      dismissAll: 'Dismiss All',
+      autoSwitched: 'Auto failover triggered',
+      occurredTimes: 'Consecutive'
     }
   }
 };

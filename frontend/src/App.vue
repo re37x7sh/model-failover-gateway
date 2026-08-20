@@ -2,9 +2,36 @@
   <div class="app-layout">
     <Header 
       :current-tab="currentTab" 
+      :alerts="alerts"
       @update:current-tab="currentTab = $event" 
       @open-settings="showSettingsModal = true"
+      @dismiss-alert="handleDismissAlert"
+      @clear-alerts="handleClearAllAlerts"
     />
+
+    <!-- ⚠️ 渠道异常全局告警横幅（可手动关闭） -->
+    <transition name="banner-slide">
+      <div v-if="alerts.length > 0" class="alert-top-bar">
+        <div class="alert-top-container">
+          <div class="alert-content">
+            <span class="alert-icon">⚠️</span>
+            <span class="alert-title">渠道异常告警：</span>
+            <span class="alert-channel">[{{ alerts[0].channelName }}]</span>
+            <span class="alert-reason">{{ alerts[0].reason }}</span>
+            <span v-if="alerts[0].occurCount > 1" class="badge badge-warning">发生 {{ alerts[0].occurCount }} 次</span>
+            <span class="alert-tip">（网关已自动触发智能故障转移）</span>
+          </div>
+          <div class="alert-actions">
+            <button class="alert-dismiss-btn" @click="handleDismissAlert(alerts[0].id)" title="手动关闭此通知">
+              ✕ 关闭通知
+            </button>
+            <button v-if="alerts.length > 1" class="alert-clear-all-btn" @click="handleClearAllAlerts" title="清空全部异常通知">
+              全部忽略 ({{ alerts.length }})
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <main class="main-content">
       <transition name="view-fade" mode="out-in">
@@ -71,6 +98,8 @@ const toastRef = ref(null);
 
 const channels = ref([]);
 const logs = ref([]);
+const alerts = ref([]);
+
 const summary = reactive({
   totalChannels: 0,
   activeChannels: 0,
@@ -110,16 +139,46 @@ async function loadLogsAndSummary() {
   }
 }
 
+async function loadAlerts() {
+  try {
+    const res = await api.getNotifications();
+    alerts.value = res || [];
+  } catch (err) {
+    // 静默忽略轮询错误
+  }
+}
+
+async function handleDismissAlert(id) {
+  try {
+    await api.dismissNotification(id);
+    alerts.value = alerts.value.filter(a => a.id !== id);
+    showToast('已关闭该条异常通知', 'info');
+  } catch (err) {
+    showToast(`操作失败: ${err.message}`, 'error');
+  }
+}
+
+async function handleClearAllAlerts() {
+  try {
+    await api.clearAllNotifications();
+    alerts.value = [];
+    showToast('已清空所有异常通知', 'success');
+  } catch (err) {
+    showToast(`操作失败: ${err.message}`, 'error');
+  }
+}
+
 async function loadAllData() {
-  await Promise.all([loadChannels(), loadLogsAndSummary()]);
+  await Promise.all([loadChannels(), loadLogsAndSummary(), loadAlerts()]);
 }
 
 onMounted(() => {
   loadAllData();
-  // 每 5 秒静默同步一次概览数据
+  // 每 3 秒静默同步一次告警与概览数据
   setInterval(() => {
     loadLogsAndSummary();
-  }, 5000);
+    loadAlerts();
+  }, 3000);
 });
 </script>
 
@@ -136,6 +195,98 @@ onMounted(() => {
   width: 100%;
   margin: 0 auto;
   padding: 24px;
+}
+
+/* ⚠️ 全局顶部告警横幅样式 */
+.alert-top-bar {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.2), rgba(245, 158, 11, 0.2));
+  border-bottom: 1px solid rgba(239, 68, 68, 0.35);
+  backdrop-filter: blur(8px);
+  padding: 10px 24px;
+  position: relative;
+  z-index: 90;
+}
+
+.alert-top-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.alert-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-main);
+  flex-wrap: wrap;
+}
+
+.alert-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.alert-title {
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.alert-channel {
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.alert-reason {
+  color: var(--text-main);
+}
+
+.alert-tip {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-dismiss-btn,
+.alert-clear-all-btn {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.alert-dismiss-btn:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.alert-clear-all-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.banner-slide-enter-active,
+.banner-slide-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.banner-slide-enter-from,
+.banner-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-100%);
 }
 
 .view-fade-enter-active,

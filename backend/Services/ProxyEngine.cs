@@ -14,6 +14,7 @@ public class ProxyEngine : IProxyEngine
     private readonly IChannelService _channelService;
     private readonly ILogService _logService;
     private readonly ITokenStatsService _tokenStatsService;
+    private readonly IAlertService _alertService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ProxyEngine> _logger;
 
@@ -27,12 +28,14 @@ public class ProxyEngine : IProxyEngine
         IChannelService channelService,
         ILogService logService,
         ITokenStatsService tokenStatsService,
+        IAlertService alertService,
         IHttpClientFactory httpClientFactory,
         ILogger<ProxyEngine> logger)
     {
         _channelService = channelService;
         _logService = logService;
         _tokenStatsService = tokenStatsService;
+        _alertService = alertService;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
@@ -245,6 +248,7 @@ public class ProxyEngine : IProxyEngine
                                 channelLabel, (int)upstreamResponse.StatusCode, errorText);
 
                             lastErrorDetails = $"[{channelLabel}] HTTP {(int)upstreamResponse.StatusCode}: {errorText}";
+                            _alertService.AddAlert(channel.Id, channelLabel, channel.Group ?? "all", $"HTTP {(int)upstreamResponse.StatusCode} 欠费/限流，已自动切换备用");
                             isFailoverOccurred = true;
                             continue; // 尝试当前渠道的下一个 Key 或下一个渠道
                         }
@@ -302,6 +306,7 @@ public class ProxyEngine : IProxyEngine
                 {
                     _logger.LogError(ex, "请求渠道 [{Label}] 发生网络异常: {Message}", channelLabel, ex.Message);
                     lastErrorDetails = $"[{channelLabel}] 网络异常: {ex.Message}";
+                    _alertService.AddAlert(channel.Id, channelLabel, channel.Group ?? "all", $"网络异常: {ex.Message}");
 
                     // 如果已经开始向客户端流式输出响应体，无法在中断后再切换渠道或重设状态码
                     if (context.Response.HasStarted)

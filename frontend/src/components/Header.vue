@@ -26,6 +26,64 @@
       </nav>
 
       <div class="header-actions">
+        <!-- 🔔 渠道异常告警通知中心 -->
+        <div class="notification-wrapper">
+          <button 
+            :class="['bell-btn', { 'has-alerts': alerts.length > 0, active: showNotificationDropdown }]" 
+            @click="showNotificationDropdown = !showNotificationDropdown"
+            :title="t.alerts.title"
+          >
+            <span>🔔</span>
+            <span v-if="alerts.length > 0" class="bell-badge">{{ alerts.length }}</span>
+          </button>
+
+          <!-- 浮动通知下拉面板 -->
+          <div v-if="showNotificationDropdown" class="notification-dropdown glass-card">
+            <div class="notif-header">
+              <div class="notif-title-row">
+                <span class="notif-title">⚠️ {{ t.alerts.title }}</span>
+                <span v-if="alerts.length > 0" class="badge badge-danger">{{ alerts.length }}</span>
+              </div>
+              <button 
+                v-if="alerts.length > 0" 
+                class="notif-clear-btn" 
+                @click="$emit('clearAlerts')"
+              >
+                {{ t.alerts.clearAll }}
+              </button>
+            </div>
+
+            <div v-if="alerts.length === 0" class="notif-empty">
+              <span class="empty-icon">🎉</span>
+              <span>{{ t.alerts.empty }}</span>
+            </div>
+
+            <div v-else class="notif-list">
+              <div v-for="item in alerts" :key="item.id" class="notif-item">
+                <div class="notif-item-top">
+                  <span class="notif-channel">[{{ item.channelName }}]</span>
+                  <span v-if="item.group && item.group !== 'all'" class="badge badge-info">{{ item.group }}</span>
+                  <span class="notif-time">{{ formatTime(item.timestamp) }}</span>
+                </div>
+                <div class="notif-reason">{{ item.reason }}</div>
+                <div class="notif-item-bottom">
+                  <span v-if="item.occurCount > 1" class="badge badge-warning">
+                    {{ t.alerts.occurredTimes }} {{ item.occurCount }} 次
+                  </span>
+                  <span v-else class="badge badge-muted">{{ t.alerts.autoSwitched }}</span>
+                  <button 
+                    class="notif-dismiss-btn" 
+                    @click.stop="$emit('dismissAlert', item.id)"
+                    :title="t.alerts.dismiss"
+                  >
+                    ✕ {{ t.alerts.dismiss }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button class="settings-btn" @click="$emit('openSettings')" :title="t.nav.settings">
           <span>⚡ {{ t.nav.settings }}</span>
         </button>
@@ -59,10 +117,14 @@ defineProps({
   currentTab: {
     type: String,
     required: true
+  },
+  alerts: {
+    type: Array,
+    default: () => []
   }
 });
 
-defineEmits(['update:currentTab', 'openSettings']);
+defineEmits(['update:currentTab', 'openSettings', 'dismissAlert', 'clearAlerts']);
 
 const tabs = computed(() => [
   { id: 'dashboard', label: t.value.nav.dashboard, icon: '📊' },
@@ -73,6 +135,13 @@ const tabs = computed(() => [
 ]);
 
 const isDark = ref(true);
+const showNotificationDropdown = ref(false);
+
+function formatTime(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return d.toTimeString().split(' ')[0];
+}
 
 function toggleTheme() {
   isDark.value = !isDark.value;
@@ -99,7 +168,7 @@ function toggleTheme() {
 }
 
 .header-container {
-  max-width: 1280px;
+  max-width: 1440px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -111,18 +180,20 @@ function toggleTheme() {
   display: flex;
   align-items: center;
   gap: 12px;
+  text-decoration: none;
+  cursor: default;
 }
 
 .logo-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .brand-text {
@@ -133,16 +204,16 @@ function toggleTheme() {
 .brand-title {
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--text-main), var(--text-muted));
+  letter-spacing: -0.3px;
+  background: linear-gradient(to right, #ffffff, #94a3b8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .brand-badge {
-  font-size: 11px;
-  color: var(--accent-primary);
+  font-size: 10px;
   font-family: var(--font-mono);
+  color: var(--accent-primary);
   font-weight: 600;
 }
 
@@ -201,6 +272,17 @@ function toggleTheme() {
   color: var(--text-muted);
 }
 
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.active {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+
 .settings-btn {
   display: flex;
   align-items: center;
@@ -242,5 +324,206 @@ function toggleTheme() {
 .lang-toggle-btn:hover {
   background: var(--bg-hover);
   border-color: var(--border-focus);
+}
+
+/* 🔔 告警通知中心样式 */
+.notification-wrapper {
+  position: relative;
+}
+
+.bell-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.bell-btn:hover,
+.bell-btn.active {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+
+.bell-btn.has-alerts {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.bell-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+  animation: badge-pulse 2s infinite;
+}
+
+@keyframes badge-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 360px;
+  max-height: 420px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: dropdown-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.notif-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notif-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.notif-clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.notif-clear-btn:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.notif-empty {
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.empty-icon {
+  font-size: 24px;
+}
+
+.notif-list {
+  overflow-y: auto;
+  max-height: 340px;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.notif-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.notif-channel {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--warning);
+}
+
+.notif-time {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.notif-reason {
+  font-size: 12px;
+  color: var(--text-main);
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.notif-item-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.notif-dismiss-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.notif-dismiss-btn:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 </style>

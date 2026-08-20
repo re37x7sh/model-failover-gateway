@@ -53,5 +53,10 @@ export const api = {
   getChannelTokenStats: () => request('/tokenstats/channels'),
   getKeyTokenStats: (channelId = '') => 
     request(`/tokenstats/keys${channelId ? `?channelId=${encodeURIComponent(channelId)}` : ''}`),
-  clearTokenStats: () => request('/tokenstats', { method: 'DELETE' })
+  clearTokenStats: () => request('/tokenstats', { method: 'DELETE' }),
+
+  // 渠道异常通知
+  getNotifications: () => request('/notifications'),
+  dismissNotification: (id) => request(`/notifications/${id}/dismiss`, { method: 'POST' }),
+  clearAllNotifications: () => request('/notifications/clear', { method: 'POST' })
 };

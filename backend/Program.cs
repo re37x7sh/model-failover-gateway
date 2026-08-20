@@ -25,8 +25,9 @@ builder.Services.AddSingleton<IConfigInjectionService, ConfigInjectionService>()
 builder.Services.AddSingleton<IChannelService, ChannelService>();
 builder.Services.AddSingleton<ITokenStatsService, TokenStatsService>();
 builder.Services.AddSingleton<ILogService, LogService>();
-builder.Services.AddSingleton<IProxyEngine, ProxyEngine>();
 builder.Services.AddSingleton<TrayIconManager>();
+builder.Services.AddSingleton<IAlertService, AlertService>();
+builder.Services.AddSingleton<IProxyEngine, ProxyEngine>();
 
 // 4. 允许跨域（方便开发调试与各种客户端调用）
 builder.Services.AddCors(options =>
