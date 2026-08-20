@@ -100,10 +100,10 @@
         <thead>
           <tr>
             <th>时间</th>
-            <th>端点路径</th>
-            <th>请求模型</th>
-            <th>故障转移链路 (Failover Trail)</th>
-            <th>最终处理渠道</th>
+            <th class="col-path">端点路径</th>
+            <th class="col-model">请求模型</th>
+            <th class="col-trail">故障转移链路 (Failover Trail)</th>
+            <th class="col-final">最终处理渠道</th>
             <th>状态码</th>
             <th>总耗时</th>
             <th>操作</th>
@@ -113,34 +113,34 @@
           <template v-for="log in filteredLogs" :key="log.id">
             <tr :class="['log-row', { 'row-failover': log.isFailover, 'row-error': log.statusCode >= 400 }]">
               <td class="font-mono text-dim">{{ formatTime(log.timestamp) }}</td>
-              <td>
-                <div class="endpoint-badge">
+              <td class="col-path">
+                <div class="endpoint-badge" :title="log.requestPath">
                   <span class="method-tag">{{ log.requestMethod }}</span>
-                  <span class="path-text font-mono">{{ log.requestPath }}</span>
+                  <span class="path-text font-mono truncate-text">{{ log.requestPath }}</span>
                 </div>
               </td>
-              <td>
-                <span class="code-tag">{{ log.model || '-' }}</span>
+              <td class="col-model" :title="log.model || '-'">
+                <span class="code-tag truncate-text">{{ log.model || '-' }}</span>
               </td>
-              <td>
+              <td class="col-trail" :title="getTrailTitle(log)">
                 <div v-if="log.triedChannels && log.triedChannels.length > 1" class="failover-trail">
                   <template v-for="(ch, idx) in log.triedChannels" :key="idx">
-                    <span :class="['trail-node', idx === log.triedChannels.length - 1 ? 'trail-success' : 'trail-fail']">
+                    <span :class="['trail-node', idx === log.triedChannels.length - 1 ? 'trail-success' : 'trail-fail']" :title="ch">
                       {{ ch }}
                     </span>
                     <span v-if="idx < log.triedChannels.length - 1" class="trail-arrow">➔</span>
                   </template>
                   <span class="badge badge-warning trail-badge">救急触发</span>
                 </div>
-                <div v-else-if="log.triedChannels && log.triedChannels.length === 1">
-                  <span class="text-muted">{{ log.triedChannels[0] }}</span>
+                <div v-else-if="log.triedChannels && log.triedChannels.length === 1" class="single-trail">
+                  <span class="text-muted truncate-text" :title="log.triedChannels[0]">{{ log.triedChannels[0] }}</span>
                 </div>
                 <div v-else>
                   <span class="text-dim">-</span>
                 </div>
               </td>
-              <td>
-                <span :class="['final-channel-tag', log.finalChannel ? 'channel-active' : 'channel-none']">
+              <td class="col-final" :title="log.finalChannel || '无成功响应'">
+                <span :class="['final-channel-tag', 'truncate-text', log.finalChannel ? 'channel-active' : 'channel-none']">
                   {{ log.finalChannel || '无成功响应' }}
                 </span>
               </td>
@@ -247,6 +247,13 @@ function stopTimer() {
     clearInterval(refreshTimer);
     refreshTimer = null;
   }
+}
+
+function getTrailTitle(log) {
+  if (log.triedChannels && log.triedChannels.length > 0) {
+    return log.triedChannels.join(' ➔ ');
+  }
+  return '-';
 }
 
 const showSettingsModal = ref(false);
@@ -421,10 +428,51 @@ async function clearLogs() {
   color: var(--text-main);
 }
 
+.col-trail {
+  max-width: 220px;
+  min-width: 140px;
+}
+
+.col-final {
+  max-width: 180px;
+  min-width: 120px;
+}
+
+.col-model {
+  max-width: 160px;
+  min-width: 100px;
+}
+
+.col-path {
+  max-width: 220px;
+  min-width: 130px;
+}
+
+.truncate-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.single-trail {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
 .failover-trail {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trail-node {
@@ -432,6 +480,12 @@ async function clearLogs() {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .trail-fail {
