@@ -156,9 +156,9 @@ public class TrayIconManager : IDisposable
 
                 _notifyIcon = new NotifyIcon
                 {
-                    Icon = SystemIcons.Shield,
+                    Icon = CreateGatewayIcon(),
                     ContextMenuStrip = contextMenu,
-                    Text = $"Model Failover Gateway (127.0.0.1:{port})",
+                    Text = $"Model Failover Gateway ({port})",
                     Visible = true
                 };
 
@@ -186,6 +186,42 @@ public class TrayIconManager : IDisposable
         // NOTE: Windows Forms 消息循环必须在 STA 单元线程上运行
         _trayThread.SetApartmentState(ApartmentState.STA);
         _trayThread.Start();
+    }
+
+    /// <summary>
+    /// 动态生成高对比度且 100% 兼容 Windows Shell 的托盘原生图标（紫底白色闪电 ⚡）
+    /// </summary>
+    private static Icon CreateGatewayIcon()
+    {
+        try
+        {
+            using var bmp = new Bitmap(32, 32);
+            using var g = Graphics.FromImage(bmp);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            // 1. 绘制高对比度渐变背景圆形 (靛蓝/紫色 #6366f1)
+            using var brush = new SolidBrush(Color.FromArgb(99, 102, 241));
+            g.FillEllipse(brush, 1, 1, 30, 30);
+
+            using var borderPen = new Pen(Color.FromArgb(199, 210, 254), 2f);
+            g.DrawEllipse(borderPen, 1, 1, 30, 30);
+
+            // 2. 绘制醒目的白色能量闪电 ⚡ 矢量图标
+            var lightningPoints = new PointF[]
+            {
+                new(17, 5), new(9, 17), new(15, 17),
+                new(13, 27), new(23, 14), new(17, 14)
+            };
+            g.FillPolygon(Brushes.White, lightningPoints);
+
+            // 3. 生成原生 HICON 句柄
+            var hIcon = bmp.GetHicon();
+            return Icon.FromHandle(hIcon);
+        }
+        catch
+        {
+            return SystemIcons.Application;
+        }
     }
 
     private static void OpenBrowser(string url)
