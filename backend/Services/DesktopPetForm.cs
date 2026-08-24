@@ -133,74 +133,82 @@ public class DesktopPetForm : Form
 
     private void OnAnimationTick(object? sender, EventArgs e)
     {
-        _tickCount++;
-
-        // 眨眼逻辑
-        if (_blinkTimer > 0)
+        try
         {
-            _blinkTimer--;
-            if (_blinkTimer == 0) _isBlinking = false;
-        }
-        else if (_tickCount % 90 == 0) // 每约 3 秒眨眼一次
-        {
-            _isBlinking = true;
-            _blinkTimer = 4; // 闭眼 4 帧
-        }
+            _tickCount++;
 
-        if (_celebrateTicks > 0) _celebrateTicks--;
-        if (_bubbleFadeTicks > 0) _bubbleFadeTicks--;
+            // 眨眼逻辑
+            if (_blinkTimer > 0)
+            {
+                _blinkTimer--;
+                if (_blinkTimer == 0) _isBlinking = false;
+            }
+            else if (_tickCount % 90 == 0) // 每约 3 秒眨眼一次
+            {
+                _isBlinking = true;
+                _blinkTimer = 4; // 闭眼 4 帧
+            }
 
-        // 获取实时状态
-        var status = _alertService.GetCurrentTaskStatus();
-        if (status.State == "completed" && _celebrateTicks == 0 && status.SessionDurationMs > 0)
-        {
-            _celebrateTicks = 90; // 庆祝撒花 3 秒
-            var durSec = status.SessionDurationMs / 1000.0;
-            var durText = durSec >= 60 ? $"{(int)(durSec / 60)}分{(int)(durSec % 60)}秒" : $"{durSec:F1}s";
-            var turnInfo = status.TurnCount > 1 ? $"共 {status.TurnCount} 步，" : "";
-            ShowBubble($"任务全部搞定！{turnInfo}总耗时 {durText} 🎉", 6000);
-        }
-        else if (status.State == "tool_use" && _tickCount % 60 == 0 && _bubbleFadeTicks <= 0)
-        {
-            ShowBubble($"🔍 正在执行工具: 第 {status.TurnCount} 步...", 2000);
-        }
+            if (_celebrateTicks > 0) _celebrateTicks--;
+            if (_bubbleFadeTicks > 0) _bubbleFadeTicks--;
 
-        Invalidate();
+            // 获取实时状态
+            var status = _alertService.GetCurrentTaskStatus();
+            if (status.State == "completed" && _celebrateTicks == 0 && status.SessionDurationMs > 0)
+            {
+                _celebrateTicks = 90; // 庆祝撒花 3 秒
+                var durSec = status.SessionDurationMs / 1000.0;
+                var durText = durSec >= 60 ? $"{(int)(durSec / 60)}分{(int)(durSec % 60)}秒" : $"{durSec:F1}s";
+                var turnInfo = status.TurnCount > 1 ? $"共 {status.TurnCount} 步，" : "";
+                ShowBubble($"任务全部搞定！{turnInfo}总耗时 {durText} 🎉", 6000);
+            }
+            else if (status.State == "tool_use" && _tickCount % 60 == 0 && _bubbleFadeTicks <= 0)
+            {
+                ShowBubble($"🔍 正在执行工具: 第 {status.TurnCount} 步...", 2000);
+            }
+
+            Invalidate();
+        }
+        catch { }
     }
 
     private void OnDockCheckTick(object? sender, EventArgs e)
     {
-        if (_isDragging) return;
-
-        var cursorPos = Cursor.Position;
-        var isMouseOver = Bounds.Contains(cursorPos);
-        var wa = GetWorkingArea();
-
-        // 判断当前吸附边缘
-        if (_dockSide != DockSide.None)
+        try
         {
-            if (isMouseOver)
+            if (_isDragging) return;
+
+            var cursorPos = Cursor.Position;
+            var isMouseOver = Bounds.Contains(cursorPos);
+            var wa = GetWorkingArea();
+
+            // 判断当前吸附边缘
+            if (_dockSide != DockSide.None)
             {
-                _hoverStayTicks = 10;
-                if (_isCollapsed)
+                if (isMouseOver)
                 {
-                    // 展开滑出
-                    SlideOut(wa);
+                    _hoverStayTicks = 10;
+                    if (_isCollapsed)
+                    {
+                        // 展开滑出
+                        SlideOut(wa);
+                    }
                 }
-            }
-            else
-            {
-                if (_hoverStayTicks > 0)
+                else
                 {
-                    _hoverStayTicks--;
-                }
-                else if (!_isCollapsed)
-                {
-                    // 收缩进屏幕边框
-                    CollapseToEdge(wa);
+                    if (_hoverStayTicks > 0)
+                    {
+                        _hoverStayTicks--;
+                    }
+                    else if (!_isCollapsed)
+                    {
+                        // 收缩进屏幕边框
+                        CollapseToEdge(wa);
+                    }
                 }
             }
         }
+        catch { }
     }
 
     private void SlideOut(Rectangle wa)

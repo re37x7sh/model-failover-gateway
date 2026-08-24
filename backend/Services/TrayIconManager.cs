@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -44,6 +45,10 @@ public class TrayIconManager : IDisposable
         {
             try
             {
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                Application.ThreadException += (s, e) => { };
+                AppDomain.CurrentDomain.UnhandledException += (s, e) => { };
+
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
@@ -188,35 +193,45 @@ public class TrayIconManager : IDisposable
         _trayThread.Start();
     }
 
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool DestroyIcon(IntPtr handle);
+
     /// <summary>
     /// 动态生成高对比度且 100% 兼容 Windows Shell 的托盘原生图标（紫底白色闪电 ⚡）
+    /// NOTE: 必须通过 Icon.Clone 复制托管副本并调用 DestroyIcon 释放原始非托管句柄，防止 GC 后图标句柄失效被系统移除
     /// </summary>
     private static Icon CreateGatewayIcon()
     {
         try
         {
             using var bmp = new Bitmap(32, 32);
-            using var g = Graphics.FromImage(bmp);
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-
-            // 1. 绘制高对比度渐变背景圆形 (靛蓝/紫色 #6366f1)
-            using var brush = new SolidBrush(Color.FromArgb(99, 102, 241));
-            g.FillEllipse(brush, 1, 1, 30, 30);
-
-            using var borderPen = new Pen(Color.FromArgb(199, 210, 254), 2f);
-            g.DrawEllipse(borderPen, 1, 1, 30, 30);
-
-            // 2. 绘制醒目的白色能量闪电 ⚡ 矢量图标
-            var lightningPoints = new PointF[]
+            using (var g = Graphics.FromImage(bmp))
             {
-                new(17, 5), new(9, 17), new(15, 17),
-                new(13, 27), new(23, 14), new(17, 14)
-            };
-            g.FillPolygon(Brushes.White, lightningPoints);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // 3. 生成原生 HICON 句柄
+                // 1. 绘制高对比度渐变背景圆形 (靛蓝/紫色 #6366f1)
+                using var brush = new SolidBrush(Color.FromArgb(99, 102, 241));
+                g.FillEllipse(brush, 1, 1, 30, 30);
+
+                using var borderPen = new Pen(Color.FromArgb(199, 210, 254), 2f);
+                g.DrawEllipse(borderPen, 1, 1, 30, 30);
+
+                // 2. 绘制醒目的白色能量闪电 ⚡ 矢量图标
+                var lightningPoints = new PointF[]
+                {
+                    new(17, 5), new(9, 17), new(15, 17),
+                    new(13, 27), new(23, 14), new(17, 14)
+                };
+                g.FillPolygon(Brushes.White, lightningPoints);
+            }
+
+            // 3. 生成原生 HICON 句柄并深拷贝为持久的托管 Icon
             var hIcon = bmp.GetHicon();
-            return Icon.FromHandle(hIcon);
+            using var tempIcon = Icon.FromHandle(hIcon);
+            var permanentIcon = (Icon)tempIcon.Clone();
+            DestroyIcon(hIcon);
+
+            return permanentIcon;
         }
         catch
         {
