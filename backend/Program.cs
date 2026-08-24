@@ -1,6 +1,24 @@
 using ModelFailoverGateway.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// 智能自适应 ContentRoot 路径，无论从项目根目录、backend 目录或 bin 输出目录双击均能正确加载配置文件与静态资源
+var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+var currentDir = Directory.GetCurrentDirectory();
+var contentRoot = currentDir;
+
+if (Directory.Exists(Path.Combine(currentDir, "backend")) && File.Exists(Path.Combine(currentDir, "backend", "appsettings.json")))
+{
+    contentRoot = Path.Combine(currentDir, "backend");
+}
+else if (!File.Exists(Path.Combine(currentDir, "appsettings.json")) && File.Exists(Path.Combine(baseDir, "appsettings.json")))
+{
+    contentRoot = baseDir;
+}
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = contentRoot
+});
 
 // 1. 注册核心服务与控制器
 builder.Services.AddControllers();
