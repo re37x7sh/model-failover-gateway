@@ -49,7 +49,7 @@ public class DesktopPetForm : Form
         "🚀 今天也是效率拉满的一天！",
         "✨ 点击我可以切换专属鼓励语哦~",
         "🐱 喵~ 随时准备为您敲键盘！",
-        "🦾 Claude / Codex 链路畅通无阻！"
+        "⚡ Claude / Codex 链路畅通无阻！"
     };
 
     private static Rectangle GetWorkingArea()
@@ -670,20 +670,35 @@ public class DesktopPetForm : Form
     }
 
     /// <summary>
-    /// 绘制高颜值暗色玻璃拟态气泡对话框（带指示箭头与 ✕ 关闭按钮）
+    /// 绘制高颜值暗色玻璃拟态气泡对话框（带指示箭头与 ✕ 关闭按钮，支持 Emoji 分离渲染）
     /// </summary>
     private void DrawSpeechBubble(Graphics g, string text)
     {
-        using var font = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Bold);
-        var size = g.MeasureString(text, font);
+        // 1. 分离前缀 Emoji 与文字内容，防止 GDI+ 缺少中文字体 Emoji 回退导致方框乱码 ▯
+        string icon = "";
+        string message = text;
+
+        var match = System.Text.RegularExpressions.Regex.Match(text, @"^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|\p{So}|\p{Cs})\s*");
+        if (match.Success)
+        {
+            icon = match.Groups[1].Value;
+            message = text.Substring(match.Length).Trim();
+        }
+
+        using var fontText = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Bold);
+        using var fontEmoji = new Font("Segoe UI Emoji", 8.5f);
+
+        var sizeEmoji = !string.IsNullOrEmpty(icon) ? g.MeasureString(icon, fontEmoji) : SizeF.Empty;
+        var sizeText = g.MeasureString(message, fontText);
 
         var closeBtnWidth = 18f;
-        var bubbleW = Math.Min(Math.Max(size.Width + closeBtnWidth + 24, 110), Width - 12);
+        var totalContentWidth = (sizeEmoji.Width > 0 ? sizeEmoji.Width + 2 : 0) + sizeText.Width;
+        var bubbleW = Math.Min(Math.Max(totalContentWidth + closeBtnWidth + 22, 110), Width - 12);
         var bubbleH = 28f;
         var bx = (Width - bubbleW) / 2;
         var by = 6f;
 
-        // 1. 深色半透明玻璃拟态背景
+        // 2. 深色半透明玻璃拟态背景
         using var bgBrush = new SolidBrush(Color.FromArgb(240, 15, 23, 42)); // #0F172A 深海军蓝
         using var borderPen = new Pen(Color.FromArgb(99, 102, 241), 1.6f);   // #6366F1 紫蓝微光边框
 
@@ -691,7 +706,7 @@ public class DesktopPetForm : Form
         g.FillRoundedRectangle(bgBrush, rect, 14);
         g.DrawRoundedRectangle(borderPen, rect, 14);
 
-        // 2. 气泡下方向下小箭头
+        // 3. 气泡下方向下小箭头
         var arrowPoints = new PointF[]
         {
             new(Width / 2 - 5, by + bubbleH - 1),
@@ -702,13 +717,22 @@ public class DesktopPetForm : Form
         g.DrawLine(borderPen, Width / 2 - 5, by + bubbleH - 1, Width / 2, by + bubbleH + 5);
         g.DrawLine(borderPen, Width / 2 + 5, by + bubbleH - 1, Width / 2, by + bubbleH + 5);
 
-        // 3. 文本绘制
+        // 4. 绘制图标 (采用 Segoe UI Emoji 专属字体，彻底根除 ▯ 乱码方框)
+        float curX = bx + 10;
         using var textBrush = new SolidBrush(Color.FromArgb(248, 250, 252));
-        var textRect = new RectangleF(bx + 10, by + 5.5f, bubbleW - closeBtnWidth - 14, bubbleH - 10);
-        using var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(text, font, textBrush, textRect, sf);
 
-        // 4. ✕ 关闭按钮
+        if (!string.IsNullOrEmpty(icon))
+        {
+            g.DrawString(icon, fontEmoji, textBrush, curX, by + 4.5f);
+            curX += sizeEmoji.Width - 4;
+        }
+
+        // 5. 绘制文字 (采用 Microsoft YaHei UI 保证中英文极致清晰)
+        var textRect = new RectangleF(curX, by + 5.5f, bubbleW - (curX - bx) - closeBtnWidth - 4, bubbleH - 10);
+        using var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+        g.DrawString(message, fontText, textBrush, textRect, sf);
+
+        // 6. ✕ 关闭按钮
         var closeX = bx + bubbleW - 18;
         var closeY = by + 6.5f;
         _bubbleCloseRect = new RectangleF(closeX - 4, by + 2, 20, 24);
@@ -729,11 +753,14 @@ public class DesktopPetForm : Form
 
         var turnText = turnCount > 1 ? $" (第 {turnCount} 步)" : "";
         var icon = isToolUse ? "🔍" : "⚡";
-        var text = $"{icon} {timeText}{turnText}";
+        var text = $" {timeText}{turnText}";
 
-        using var font = new Font("Consolas", 8.8f, FontStyle.Bold);
-        var size = g.MeasureString(text, font);
-        var badgeW = size.Width + 18;
+        using var fontEmoji = new Font("Segoe UI Emoji", 8f);
+        using var fontMono = new Font("Consolas", 8.8f, FontStyle.Bold);
+
+        var sizeIcon = g.MeasureString(icon, fontEmoji);
+        var sizeText = g.MeasureString(text, fontMono);
+        var badgeW = sizeIcon.Width + sizeText.Width + 10;
         var badgeH = 21f;
         var bx = (Width - badgeW) / 2;
         var by = Height - 26f;
@@ -750,9 +777,10 @@ public class DesktopPetForm : Form
         g.FillRoundedRectangle(gradBrush, rect, 10);
         g.DrawRoundedRectangle(borderPen, rect, 10);
 
-        // 文本绘制
+        // 绘制图标与时间文本
         using var textBrush = new SolidBrush(Color.White);
-        g.DrawString(text, font, textBrush, bx + 9, by + 2.5f);
+        g.DrawString(icon, fontEmoji, textBrush, bx + 6, by + 2.5f);
+        g.DrawString(text, fontMono, textBrush, bx + 6 + sizeIcon.Width - 4, by + 2.5f);
     }
 }
 
