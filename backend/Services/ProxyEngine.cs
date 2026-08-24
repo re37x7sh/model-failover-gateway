@@ -497,17 +497,70 @@ public class ProxyEngine : IProxyEngine
                 completionTokens,
                 isStream: true);
 
-            // 触发长任务完成主动通知与桌面宠物联动
+            var (isToolCall, stopReason) = ExtractStopReason(sampleText);
+
+            // 触发长任务完成主动通知与桌面宠物联动 (精准区分工具调用与最终回答)
             _alertService.NotifyTaskComplete(
                 model ?? "AI Model", 
                 channelName, 
                 stopwatch.ElapsedMilliseconds, 
-                promptTokens + completionTokens);
+                promptTokens + completionTokens,
+                isToolCall,
+                stopReason);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Token 统计提取与任务完成通知异常");
         }
+    }
+
+    /// <summary>
+    /// 识别流式响应末尾的 stop_reason / finish_reason，判断是否为工具调用中间环节
+    /// </summary>
+    private static (bool isToolCall, string stopReason) ExtractStopReason(string sampleText)
+    {
+        if (string.IsNullOrEmpty(sampleText)) return (false, "");
+
+        // 1. Claude 格式: "stop_reason": "tool_use" / "end_turn"
+        var stopReasonMatch = System.Text.RegularExpressions.Regex.Match(sampleText, @"""stop_reason""\s*:\s*""([^""]+)""");
+        if (stopReasonMatch.Success)
+        {
+            var reason = stopReasonMatch.Groups[1].Value.Trim().ToLowerInvariant();
+            if (reason == "tool_use")
+            {
+                return (true, "tool_use");
+            }
+            if (reason is "end_turn" or "stop_sequence")
+            {
+                return (false, reason);
+            }
+        }
+
+        // 2. OpenAI / Codex 格式: "finish_reason": "tool_calls" / "stop"
+        var finishReasonMatch = System.Text.RegularExpressions.Regex.Match(sampleText, @"""finish_reason""\s*:\s*""([^""]+)""");
+        if (finishReasonMatch.Success)
+        {
+            var reason = finishReasonMatch.Groups[1].Value.Trim().ToLowerInvariant();
+            if (reason is "tool_calls" or "function_call")
+            {
+                return (true, reason);
+            }
+            if (reason is "stop")
+            {
+                return (false, "stop");
+            }
+        }
+
+        // 3. 增强保底判定: 如果响应体中包含明确的 tool_use 块
+        if (sampleText.Contains("\"type\":\"tool_use\"") || 
+            sampleText.Contains("\"type\": \"tool_use\"") || 
+            sampleText.Contains("\"tool_calls\"") || 
+            sampleText.Contains("\"function_call\""))
+        {
+            return (true, "tool_use");
+        }
+
+        return (false, "");
     }
 
     private static (long promptTokens, long completionTokens) ExtractTokens(string responseText, int requestBodyLength, long responseLength)

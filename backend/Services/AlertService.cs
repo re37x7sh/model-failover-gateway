@@ -84,39 +84,140 @@ public class AlertService : IAlertService
         }
     }
 
+    private int _sessionTurnCount = 0;
+    private DateTime _sessionStartTime = DateTime.MinValue;
+    private DateTime _lastTurnEndTime = DateTime.MinValue;
+    private long _sessionCumulativeTokens = 0;
+    private System.Threading.Timer? _debounceTimer;
+
     public void NotifyTaskStart(string model, string channelName)
     {
         lock (_lock)
         {
+            // 取消可能存在的上一轮防抖完成计时器
+            _debounceTimer?.Dispose();
+            _debounceTimer = null;
+
+            // 判断是否属于同一个持续的 Agent 多轮工具调用链路（15秒内连续调用视为同一任务链）
+            var now = DateTime.Now;
+            if (_sessionStartTime != DateTime.MinValue && (now - _lastTurnEndTime).TotalSeconds < 15.0)
+            {
+                _sessionTurnCount++;
+            }
+            else
+            {
+                _sessionTurnCount = 1;
+                _sessionStartTime = now;
+                _sessionCumulativeTokens = 0;
+            }
+
+            var sessionElapsed = (long)(now - _sessionStartTime).TotalMilliseconds;
+
             _currentTaskStatus = new TaskStatusEvent
             {
                 State = "thinking",
                 Model = model,
                 ChannelName = channelName,
-                Timestamp = DateTime.Now
+                TurnCount = _sessionTurnCount,
+                IsToolCall = false,
+                DurationMs = 0,
+                SessionDurationMs = sessionElapsed,
+                SessionTotalTokens = _sessionCumulativeTokens,
+                StepDescription = _sessionTurnCount > 1 ? $"第 {_sessionTurnCount} 轮: 正在思考生成..." : "正在思考生成...",
+                Timestamp = now,
+                SessionStartTime = _sessionStartTime
             };
         }
     }
 
-    public void NotifyTaskComplete(string model, string channelName, long durationMs, long tokens)
+    public void NotifyTaskComplete(string model, string channelName, long durationMs, long tokens, bool isToolCall = false, string stopReason = "")
     {
         lock (_lock)
         {
-            _currentTaskStatus = new TaskStatusEvent
-            {
-                State = "completed",
-                Model = model,
-                ChannelName = channelName,
-                DurationMs = durationMs,
-                TotalTokens = tokens,
-                Timestamp = DateTime.Now
-            };
+            var now = DateTime.Now;
+            _lastTurnEndTime = now;
+            _sessionCumulativeTokens += tokens;
+            var sessionElapsedMs = (long)(now - _sessionStartTime).TotalMilliseconds;
 
-            var durationSec = durationMs / 1000.0;
-            // 智能耗时阈值过滤（只有达到阈值时才触发主动系统提醒）
-            if (_settings.EnableTaskCompleteNotification && durationSec >= _settings.TaskCompleteThresholdSeconds)
+            if (isToolCall)
             {
-                _trayManager.ShowTaskCompleteNotification(model, durationMs, tokens);
+                // NOTE: 关键优化！模型返回 tool_use 时，代表 Agent 正在本地执行工具，绝不触发完成弹窗或铃声
+                _currentTaskStatus = new TaskStatusEvent
+                {
+                    State = "tool_use",
+                    Model = model,
+                    ChannelName = channelName,
+                    TurnCount = _sessionTurnCount,
+                    IsToolCall = true,
+                    DurationMs = durationMs,
+                    SessionDurationMs = sessionElapsedMs,
+                    TotalTokens = tokens,
+                    SessionTotalTokens = _sessionCumulativeTokens,
+                    StepDescription = $"第 {_sessionTurnCount} 步: 工具执行中...",
+                    Message = $"第 {_sessionTurnCount} 步工具调用已发起",
+                    Timestamp = now,
+                    SessionStartTime = _sessionStartTime
+                };
+            }
+            else
+            {
+                // 模型最终完成输出 (stop_reason: end_turn / stop)
+                // 开启 2.5 秒防抖确认窗口，防止某些客户端连续追加后续请求
+                _currentTaskStatus = new TaskStatusEvent
+                {
+                    State = "thinking",
+                    Model = model,
+                    ChannelName = channelName,
+                    TurnCount = _sessionTurnCount,
+                    IsToolCall = false,
+                    DurationMs = durationMs,
+                    SessionDurationMs = sessionElapsedMs,
+                    TotalTokens = tokens,
+                    SessionTotalTokens = _sessionCumulativeTokens,
+                    StepDescription = $"正在完成最后输出...",
+                    Timestamp = now,
+                    SessionStartTime = _sessionStartTime
+                };
+
+                var capturedTurnCount = _sessionTurnCount;
+                var capturedElapsedMs = sessionElapsedMs;
+                var capturedTokens = _sessionCumulativeTokens;
+                var capturedModel = model;
+
+                _debounceTimer?.Dispose();
+                _debounceTimer = new System.Threading.Timer(_ =>
+                {
+                    lock (_lock)
+                    {
+                        // 确认防抖时间到达，正式结算整轮 Agent 任务
+                        _currentTaskStatus = new TaskStatusEvent
+                        {
+                            State = "completed",
+                            Model = capturedModel,
+                            ChannelName = channelName,
+                            TurnCount = capturedTurnCount,
+                            IsToolCall = false,
+                            DurationMs = durationMs,
+                            SessionDurationMs = capturedElapsedMs,
+                            TotalTokens = tokens,
+                            SessionTotalTokens = capturedTokens,
+                            StepDescription = capturedTurnCount > 1 ? $"全部完成 (共 {capturedTurnCount} 步)" : "已生成完毕",
+                            Message = capturedTurnCount > 1 ? $"共 {capturedTurnCount} 步，总耗时 {(capturedElapsedMs / 1000.0):F1}s" : $"耗时 {(capturedElapsedMs / 1000.0):F1}s",
+                            Timestamp = DateTime.Now,
+                            SessionStartTime = _sessionStartTime
+                        };
+
+                        var totalSec = capturedElapsedMs / 1000.0;
+                        if (_settings.EnableTaskCompleteNotification && totalSec >= _settings.TaskCompleteThresholdSeconds)
+                        {
+                            _trayManager.ShowTaskCompleteNotification(capturedModel, capturedElapsedMs, capturedTokens, capturedTurnCount);
+                        }
+
+                        // 重置会话
+                        _sessionStartTime = DateTime.MinValue;
+                        _sessionTurnCount = 0;
+                    }
+                }, null, 2500, Timeout.Infinite);
             }
         }
     }

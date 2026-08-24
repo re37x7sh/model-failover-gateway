@@ -272,39 +272,29 @@ public class TrayIconManager : IDisposable
     }
 
     /// <summary>
-    /// 在 Windows 系统托盘弹出长任务完成气泡通知并播放提示音
+    /// 展示长任务完成气泡提醒与播放清脆提示音
     /// </summary>
-    public void ShowTaskCompleteNotification(string model, long durationMs, long tokens)
+    public void ShowTaskCompleteNotification(string model, long durationMs, long tokens, int turnCount = 1)
     {
+        if (!IsTaskCompleteNotificationEnabled) return;
+
+        var durationSec = durationMs / 1000.0;
+        var durationText = durationSec >= 60 
+            ? $"{(int)(durationSec / 60)}分{(int)(durationSec % 60)}秒" 
+            : $"{durationSec:F1} 秒";
+
+        var tokensText = tokens > 0 ? $" | 消耗 {tokens:N0} Tokens" : "";
+        var turnText = turnCount > 1 ? $" (共 {turnCount} 步工具调用)" : "";
+
+        ShowBalloonNotification(
+            "🎉 AI 任务已全部完成！",
+            $"模型: {model}{turnText}\n累计耗时: {durationText}{tokensText}",
+            ToolTipIcon.Info
+        );
+
         if (IsSoundEnabled)
         {
             PlayChimeSound();
-        }
-
-        if (!IsTaskCompleteNotificationEnabled)
-        {
-            return;
-        }
-
-        try
-        {
-            if (_notifyIcon != null && _notifyIcon.Visible)
-            {
-                var durationSec = durationMs / 1000.0;
-                var modelText = string.IsNullOrWhiteSpace(model) ? "AI 编程模型" : model;
-                var tokenText = tokens > 0 ? $" | 消耗 {tokens:N0} Tokens" : "";
-
-                _notifyIcon.ShowBalloonTip(
-                    4500,
-                    "🎉 AI 任务已生成完毕！",
-                    $"模型: {modelText}\n耗时: {durationSec:F1} 秒{tokenText}",
-                    ToolTipIcon.Info
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "发送长任务完成气泡通知失败");
         }
     }
 

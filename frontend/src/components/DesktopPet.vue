@@ -69,12 +69,17 @@
       <span v-if="taskStatus.state === 'thinking'" class="mini-pulse-dot"></span>
     </div>
 
-    <!-- 🐱 主体动画展示区 -->
+    <!-- 🐱 主体动画展示区 (核心：经典 Bongo Cat 纯净萌系画风) -->
     <div v-else class="pet-body-wrapper" @click="handlePetClick">
-      <!-- 实时计时器徽章 (思考生成时展示) -->
-      <div v-if="taskStatus.state === 'thinking'" class="timer-badge">
-        <span class="timer-icon">⚡</span>
-        <span class="timer-text">{{ thinkingSeconds }}s</span>
+      <!-- 实时计时器徽章 (思考生成或工具执行时展示多轮与耗时) -->
+      <div 
+        v-if="taskStatus.state === 'thinking' || taskStatus.state === 'tool_use'" 
+        class="timer-badge"
+        :class="{ 'is-tool': taskStatus.state === 'tool_use' }"
+      >
+        <span class="timer-icon">{{ taskStatus.state === 'tool_use' ? '🔍' : '⚡' }}</span>
+        <span class="timer-text">{{ formattedThinkingTime }}</span>
+        <span v-if="taskStatus.turnCount > 1" class="turn-badge">(第 {{ taskStatus.turnCount }} 步)</span>
       </div>
 
       <!-- 撒花/彩带粒子特效 (完成时绽放) -->
@@ -85,90 +90,99 @@
         <span class="confetti c4">🎊</span>
       </div>
 
-      <!-- 1. 赛博猫咪 (Cat) -->
-      <div v-if="settings.petAvatar === 'cat'" class="avatar-svg-box cat-avatar">
-        <svg viewBox="0 0 100 100" width="84" height="84">
-          <!-- 身体 -->
-          <ellipse cx="50" cy="65" rx="30" ry="24" fill="#818cf8" />
-          <!-- 肚皮 -->
-          <ellipse cx="50" cy="68" rx="20" ry="16" fill="#e0e7ff" />
-          <!-- 头部 -->
-          <circle cx="50" cy="42" r="24" fill="#6366f1" />
+      <!-- 1. 经典 Bongo Cat 敲键盘猫 (默认经典皮肤) -->
+      <div v-if="settings.petAvatar === 'cat'" class="avatar-svg-box bongo-avatar">
+        <svg viewBox="0 0 120 100" width="96" height="84" class="bongo-svg">
+          <!-- 身体底色与轮廓 -->
+          <ellipse cx="60" cy="50" rx="42" ry="34" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
           <!-- 猫耳朵 -->
-          <polygon points="30,28 20,8 42,22" fill="#4f46e5" class="cat-ear ear-l" />
-          <polygon points="70,28 80,8 58,22" fill="#4f46e5" class="cat-ear ear-r" />
-          <polygon points="31,25 24,12 40,22" fill="#f43f5e" />
-          <polygon points="69,25 76,12 60,22" fill="#f43f5e" />
+          <polygon points="30,30 20,8 48,20" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-ear ear-l" />
+          <polygon points="90,30 100,8 72,20" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-ear ear-r" />
+          <polygon points="32,26 25,14 44,20" fill="#fecdd3" />
+          <polygon points="88,26 95,14 76,20" fill="#fecdd3" />
           
-          <!-- 护目镜 (思考时佩戴) -->
-          <g v-if="taskStatus.state === 'thinking'" class="goggles">
-            <rect x="28" y="32" width="44" height="14" rx="6" fill="#1e1b4b" stroke="#38bdf8" stroke-width="2" />
-            <circle cx="40" cy="39" r="4" fill="#38bdf8" class="goggle-lens" />
-            <circle cx="60" cy="39" r="4" fill="#38bdf8" class="goggle-lens" />
-          </g>
-
-          <!-- 正常眼睛 -->
-          <g v-else class="cat-eyes">
-            <ellipse cx="40" cy="39" rx="3.5" ry="5" fill="#1e1b4b" class="eye-l" />
-            <ellipse cx="60" cy="39" rx="3.5" ry="5" fill="#1e1b4b" class="eye-r" />
-            <circle cx="41.5" cy="37.5" r="1.5" fill="#ffffff" />
-            <circle cx="61.5" cy="37.5" r="1.5" fill="#ffffff" />
-          </g>
-
-          <!-- 鼻子与胡须 -->
-          <polygon points="50,45 47,43 53,43" fill="#f43f5e" />
-          <path d="M47 47 Q50 50 53 47" stroke="#1e1b4b" stroke-width="1.5" fill="none" />
-          <line x1="26" y1="44" x2="16" y2="42" stroke="#cbd5e1" stroke-width="1.5" />
-          <line x1="26" y1="47" x2="16" y2="48" stroke="#cbd5e1" stroke-width="1.5" />
-          <line x1="74" y1="44" x2="84" y2="42" stroke="#cbd5e1" stroke-width="1.5" />
-          <line x1="74" y1="47" x2="84" y2="48" stroke="#cbd5e1" stroke-width="1.5" />
-
-          <!-- 猫爪子与打字键盘 -->
-          <g v-if="taskStatus.state === 'thinking'" class="typing-hands">
-            <rect x="30" y="74" width="40" height="12" rx="3" fill="#0f172a" stroke="#6366f1" stroke-width="1.5" />
-            <circle cx="36" cy="73" r="5" fill="#e0e7ff" class="paw paw-l" />
-            <circle cx="64" cy="73" r="5" fill="#e0e7ff" class="paw paw-r" />
+          <!-- 腮红 -->
+          <ellipse cx="32" cy="52" rx="7" ry="4" fill="#fda4af" />
+          <ellipse cx="88" cy="52" rx="7" ry="4" fill="#fda4af" />
+          
+          <!-- 眼睛 -->
+          <g v-if="taskStatus.state === 'completed'">
+            <path d="M38 42 Q46 32 54 42" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" />
+            <path d="M66 42 Q74 32 82 42" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" />
           </g>
           <g v-else>
-            <circle cx="38" cy="76" r="5" fill="#e0e7ff" />
-            <circle cx="62" cy="76" r="5" fill="#e0e7ff" />
+            <circle cx="46" cy="42" r="5" fill="#1e293b" />
+            <circle cx="74" cy="42" r="5" fill="#1e293b" />
+            <circle cx="48" cy="40" r="1.8" fill="#ffffff" />
+            <circle cx="76" cy="40" r="1.8" fill="#ffffff" />
           </g>
-
-          <!-- 猫尾巴 -->
-          <path d="M78 68 Q92 60 88 45" stroke="#4f46e5" stroke-width="5" stroke-linecap="round" fill="none" class="cat-tail" />
+          
+          <!-- 嘴巴与小粉鼻 -->
+          <polygon points="57,48 63,48 60,52" fill="#fda4af" />
+          <path d="M52 50 Q60 56 60 50 Q60 56 68 50" stroke="#1e293b" stroke-width="2.2" fill="none" stroke-linecap="round" />
+          
+          <!-- 木质小桌面与键盘 -->
+          <rect x="10" y="68" width="100" height="22" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" />
+          <rect x="30" y="72" width="60" height="14" rx="3" fill="#1e293b" />
+          <rect x="36" y="75" width="8" height="8" rx="1" fill="#38bdf8" />
+          <rect x="48" y="75" width="8" height="8" rx="1" fill="#a855f7" />
+          <rect x="60" y="75" width="8" height="8" rx="1" fill="#ec4899" />
+          <rect x="72" y="75" width="8" height="8" rx="1" fill="#22c55e" />
+          
+          <!-- 双爪动作分流 -->
+          <!-- 欢呼状态 -->
+          <g v-if="taskStatus.state === 'completed'">
+            <ellipse cx="25" cy="20" rx="9" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="cheer-paw-l" />
+            <ellipse cx="95" cy="20" rx="9" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="cheer-paw-r" />
+          </g>
+          <!-- 敲键盘状态 (极速交替拍打) -->
+          <g v-else-if="taskStatus.state === 'thinking'" class="bongo-typing-paws">
+            <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-paw-l" />
+            <ellipse cx="84" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-paw-r" />
+          </g>
+          <!-- 工具态 (举放大镜) -->
+          <g v-else-if="taskStatus.state === 'tool_use'">
+            <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+            <ellipse cx="88" cy="46" rx="10" ry="9" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+            <circle cx="95" cy="35" r="7" stroke="#6366f1" stroke-width="2.5" fill="none" />
+            <line x1="100" y1="40" x2="106" y2="46" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" />
+          </g>
+          <!-- 默认空闲 -->
+          <g v-else>
+            <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+            <ellipse cx="84" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+          </g>
         </svg>
       </div>
 
       <!-- 2. 灵动机器人 (Robot) -->
       <div v-else-if="settings.petAvatar === 'robot'" class="avatar-svg-box robot-avatar">
         <svg viewBox="0 0 100 100" width="84" height="84">
-          <!-- 天线 -->
-          <line x1="50" y1="20" x2="50" y2="8" stroke="#38bdf8" stroke-width="3" />
-          <circle cx="50" cy="7" r="5" fill="#f43f5e" class="antenna-light" />
-          <!-- 头盔 -->
-          <rect x="25" y="20" width="50" height="38" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" />
-          <!-- 屏幕面罩 -->
-          <rect x="31" y="27" width="38" height="24" rx="6" fill="#0f172a" />
+          <!-- 身体 -->
+          <rect x="25" y="52" width="50" height="38" rx="8" fill="#334155" stroke="#475569" stroke-width="2" />
+          <rect x="35" y="62" width="30" height="18" rx="4" fill="#0f172a" />
+          <line x1="40" y1="71" x2="60" y2="71" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4,2" class="data-stream" />
           
-          <!-- 眼睛阵列 -->
+          <!-- 天线 -->
+          <line x1="50" y1="18" x2="50" y2="10" stroke="#94a3b8" stroke-width="3" />
+          <circle cx="50" cy="8" r="5" fill="#f43f5e" class="robot-antenna" />
+          
+          <!-- 头部 -->
+          <rect x="20" y="18" width="60" height="38" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2" />
+          
+          <!-- 眼睛 (LED 屏效果) -->
           <g v-if="taskStatus.state === 'completed'">
-            <text x="35" y="44" fill="#4ade80" font-size="14" font-weight="bold">^ _ ^</text>
+            <path d="M30 36 L44 36" stroke="#4ade80" stroke-width="4" stroke-linecap="round" />
+            <path d="M56 36 L70 36" stroke="#4ade80" stroke-width="4" stroke-linecap="round" />
           </g>
-          <g v-else-if="taskStatus.state === 'thinking'">
-            <circle cx="42" cy="39" r="4" fill="#38bdf8" class="matrix-eye" />
-            <circle cx="58" cy="39" r="4" fill="#38bdf8" class="matrix-eye" />
+          <g v-else-if="taskStatus.state === 'thinking'" class="robot-thinking-eyes">
+            <rect x="32" y="32" width="12" height="12" rx="2" fill="#38bdf8" />
+            <rect x="56" y="32" width="12" height="12" rx="2" fill="#38bdf8" />
           </g>
           <g v-else>
-            <rect x="38" y="36" width="7" height="7" rx="2" fill="#38bdf8" />
-            <rect x="55" y="36" width="7" height="7" rx="2" fill="#38bdf8" />
+            <circle cx="38" cy="37" r="5" fill="#38bdf8" class="led-eye" />
+            <circle cx="62" cy="37" r="5" fill="#38bdf8" class="led-eye" />
           </g>
-
-          <!-- 身体 -->
-          <rect x="30" y="60" width="40" height="26" rx="6" fill="#334155" stroke="#64748b" stroke-width="2" />
-          <circle cx="50" cy="72" r="5" fill="#38bdf8" class="core-light" />
-          <!-- 手臂 -->
-          <rect x="18" y="63" width="10" height="16" rx="4" fill="#1e293b" class="robot-arm arm-l" />
-          <rect x="72" y="63" width="10" height="16" rx="4" fill="#1e293b" class="robot-arm arm-r" />
         </svg>
       </div>
 
@@ -176,17 +190,20 @@
       <div v-else class="avatar-svg-box dog-avatar">
         <svg viewBox="0 0 100 100" width="84" height="84">
           <!-- 身体 -->
-          <ellipse cx="50" cy="66" rx="28" ry="22" fill="#f59e0b" />
-          <ellipse cx="50" cy="69" rx="18" ry="14" fill="#fef3c7" />
+          <ellipse cx="50" cy="65" rx="32" ry="24" fill="#f59e0b" />
+          <ellipse cx="50" cy="68" rx="22" ry="16" fill="#fef3c7" />
           <!-- 头部 -->
-          <circle cx="50" cy="42" r="23" fill="#d97706" />
-          <ellipse cx="50" cy="47" rx="16" ry="12" fill="#fef3c7" />
+          <ellipse cx="50" cy="42" rx="26" ry="22" fill="#f59e0b" />
+          <!-- 白斑脸颊 -->
+          <ellipse cx="50" cy="46" rx="18" ry="14" fill="#fef3c7" />
           <!-- 耳朵 -->
-          <polygon points="32,26 22,10 40,18" fill="#b45309" class="dog-ear ear-l" />
-          <polygon points="68,26 78,10 60,18" fill="#b45309" class="dog-ear ear-r" />
+          <polygon points="28,30 18,10 40,24" fill="#b45309" class="dog-ear ear-l" />
+          <polygon points="72,30 82,10 60,24" fill="#b45309" class="dog-ear ear-r" />
           <!-- 眼睛 -->
-          <circle cx="41" cy="40" r="3.5" fill="#1e1b4b" />
-          <circle cx="59" cy="40" r="3.5" fill="#1e1b4b" />
+          <ellipse cx="40" cy="38" rx="3.5" ry="4.5" fill="#1e1b4b" />
+          <ellipse cx="60" cy="38" rx="3.5" ry="4.5" fill="#1e1b4b" />
+          <circle cx="41.5" cy="36.5" r="1.5" fill="#ffffff" />
+          <circle cx="61.5" cy="36.5" r="1.5" fill="#ffffff" />
           <!-- 鼻子与微笑 -->
           <ellipse cx="50" cy="45" rx="3.5" ry="2.5" fill="#1e1b4b" />
           <path d="M47 48 Q50 51 53 48" stroke="#1e1b4b" stroke-width="1.5" fill="none" />
@@ -260,17 +277,28 @@ const currentAvatarIcon = computed(() => {
 });
 
 const bubbleIcon = computed(() => {
+  if (taskStatus.state === 'tool_use') return '🔍';
   if (taskStatus.state === 'thinking') return '⚡';
   if (taskStatus.state === 'completed') return '🎉';
   if (taskStatus.state === 'failover') return '⚠️';
   return '💬';
 });
 
+const formattedThinkingTime = computed(() => {
+  const s = thinkingSeconds.value;
+  if (s >= 60) {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${s}s`;
+});
+
 // 过滤气泡文本开头已有的重复 Emoji
 const displayBubbleText = computed(() => {
   if (!currentBubbleText.value) return '';
   return currentBubbleText.value
-    .replace(/^(⚡|🎉|⚠️|💬|✨)\s*/g, '')
+    .replace(/^(⚡|🎉|⚠️|💬|✨|🔍)\s*/g, '')
     .trim();
 });
 
@@ -415,7 +443,7 @@ function handleMouseUp() {
   }
 }
 
-// 轮询后端实时任务状态并驱动动画
+// 轮询后端实时任务状态并驱动动画（精准理解 Agent 多轮工作流）
 async function pollTaskStatus() {
   try {
     const res = await api.getTaskStatus();
@@ -425,24 +453,33 @@ async function pollTaskStatus() {
 
       // 状态变迁处理
       if (taskStatus.state === 'thinking') {
-        if (prevState !== 'thinking') {
+        if (prevState !== 'thinking' && prevState !== 'tool_use') {
           thinkingSeconds.value = 1;
           if (thinkingTimer) clearInterval(thinkingTimer);
           thinkingTimer = setInterval(() => {
             thinkingSeconds.value++;
           }, 1000);
-          showBubble(`正在思考生成中... (${taskStatus.model || 'AI'})`, 15000);
+          const turnTip = taskStatus.turnCount > 1 ? ` (第 ${taskStatus.turnCount} 步)` : '';
+          showBubble(`正在思考生成中...${turnTip}`, 15000);
         }
+      } else if (taskStatus.state === 'tool_use') {
+        // 工具执行状态：保持计时，提示工具调用
+        showBubble(`正在调用工具处理中 (第 ${taskStatus.turnCount || 1} 步)... 🔍`, 8000);
       } else if (taskStatus.state === 'completed') {
-        if (prevState === 'thinking') {
+        if (prevState === 'thinking' || prevState === 'tool_use') {
           if (thinkingTimer) clearInterval(thinkingTimer);
-          const durSec = (taskStatus.durationMs / 1000).toFixed(1);
-          const tokenStr = taskStatus.totalTokens > 0 ? ` (消耗 ${taskStatus.totalTokens} Tokens)` : '';
+          const totalMs = taskStatus.sessionDurationMs > 0 ? taskStatus.sessionDurationMs : taskStatus.durationMs;
+          const durSec = (totalMs / 1000).toFixed(1);
+          const durText = durSec >= 60 ? `${Math.floor(durSec / 60)}分${Math.floor(durSec % 60)}秒` : `${durSec}s`;
+          const tokenStr = taskStatus.sessionTotalTokens > 0 
+            ? ` (累计 ${taskStatus.sessionTotalTokens.toLocaleString()} Tokens)` 
+            : (taskStatus.totalTokens > 0 ? ` (消耗 ${taskStatus.totalTokens.toLocaleString()} Tokens)` : '');
+          const turnInfo = taskStatus.turnCount > 1 ? `共 ${taskStatus.turnCount} 步，` : '';
           
-          showBubble(`任务已完成！耗时 ${durSec}s${tokenStr}`, 8000);
+          showBubble(`任务全部完成啦！${turnInfo}总耗时 ${durText}${tokenStr} 🎉`, 8000);
 
           // 触发声音 (达到阈值时)
-          if (settings.enableSound && (taskStatus.durationMs / 1000) >= settings.taskCompleteThresholdSeconds) {
+          if (settings.enableSound && (totalMs / 1000) >= settings.taskCompleteThresholdSeconds) {
             playChimeSound();
           }
         }
@@ -707,6 +744,58 @@ onUnmounted(() => {
   transform: translateY(-4px) scale(1.05);
 }
 
+/* 动效：Bongo Cat 招牌交替敲键盘动效 */
+@keyframes bongoPawL {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes bongoPawR {
+  0%, 100% { transform: translateY(-8px); }
+  50% { transform: translateY(0); }
+}
+
+.bongo-paw-l {
+  animation: bongoPawL 0.16s infinite ease-in-out;
+  transform-origin: center;
+}
+
+.bongo-paw-r {
+  animation: bongoPawR 0.16s infinite ease-in-out;
+  transform-origin: center;
+}
+
+@keyframes bongoCheerL {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(10deg); }
+}
+
+@keyframes bongoCheerR {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-10deg); }
+}
+
+.cheer-paw-l {
+  animation: bongoCheerL 0.4s infinite ease-in-out alternate;
+  transform-origin: bottom center;
+}
+
+.cheer-paw-r {
+  animation: bongoCheerR 0.4s infinite ease-in-out alternate;
+  transform-origin: bottom center;
+}
+
+.timer-badge.is-tool {
+  background: linear-gradient(135deg, #ea580c, #f97316);
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.5);
+}
+
+.turn-badge {
+  font-size: 9.5px;
+  opacity: 0.92;
+  margin-left: 2px;
+}
+
 /* 动效：猫咪耳朵与尾巴摆动 */
 .cat-tail {
   transform-origin: 78px 68px;
@@ -718,7 +807,7 @@ onUnmounted(() => {
   50% { transform: rotate(15deg); }
 }
 
-.cat-ear {
+.cat-ear, .bongo-ear {
   transform-origin: 50px 30px;
   animation: ear-twitch 4s infinite ease-in-out;
 }
@@ -727,20 +816,6 @@ onUnmounted(() => {
   0%, 90%, 100% { transform: rotate(0); }
   92% { transform: rotate(-5deg); }
   96% { transform: rotate(5deg); }
-}
-
-/* 动效：打字敲键盘 */
-.is-thinking .paw-l {
-  animation: paw-type 0.2s infinite alternate ease-in-out;
-}
-
-.is-thinking .paw-r {
-  animation: paw-type 0.2s infinite alternate-reverse ease-in-out;
-}
-
-@keyframes paw-type {
-  from { transform: translateY(0); }
-  to { transform: translateY(-4px); }
 }
 
 /* 动效：跳跃欢呼 (Completed) */

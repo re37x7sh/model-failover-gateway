@@ -17,7 +17,7 @@ public interface IAlertService
     TaskNotificationSettings GetNotificationSettings();
     void SaveNotificationSettings(TaskNotificationSettings settings);
     void NotifyTaskStart(string model, string channelName);
-    void NotifyTaskComplete(string model, string channelName, long durationMs, long tokens);
+    void NotifyTaskComplete(string model, string channelName, long durationMs, long tokens, bool isToolCall = false, string stopReason = "");
     void NotifyTaskFailover(string model, string channelName, string reason);
     TaskStatusEvent GetCurrentTaskStatus();
 }
