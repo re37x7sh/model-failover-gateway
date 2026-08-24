@@ -301,8 +301,11 @@ internal class TrayApplicationContext : ApplicationContext
 
         var exitItem = new ToolStripMenuItem("❌ 退出网关", null, (s, e) =>
         {
-            _notifyIcon.Visible = false;
-            _notifyIcon.Dispose();
+            if (_notifyIcon != null)
+            {
+                _notifyIcon.Visible = false;
+                _notifyIcon.Dispose();
+            }
             _petForm?.Dispose();
             ExitThread();
             _lifetime.StopApplication();
