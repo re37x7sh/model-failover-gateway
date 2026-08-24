@@ -9,13 +9,13 @@ namespace ModelFailoverGateway.Services;
 
 /// <summary>
 /// Windows 原生置顶·贴边吸附隐藏·100% 原版经典 Bongo Cat 灵动桌面宠物
-/// 真实还原原版经典 Meme：
+/// 严格还原原版经典 Meme 细节：
 /// 1. 软萌棉花糖连体猫咪轮廓 + 尖尖猫耳 + 俏皮小胡须
 /// 2. 极简原版脸部：两颗纯黑豆豆眼 + 经典 :3 / ω 萌萌嘴
-/// 3. 透视角度机械键盘 + 滚轮小鼠标
-/// 4. 招牌拍打动效：下按肉爪 ↔ 抬爪露出粉嫩肉垫 (1大3小 🐾)
-/// 5. 完成态：端起冒热气的陶瓷小杯喝水喝茶，漂浮爱心 ❤️
-/// 6. 空闲态：软萌趴在桌面上闭眼打盹 ( ˘ω˘ )
+/// 3. 完整连体手臂（胳膊与小肉爪浑然一体，从肩膀连贯延伸至键盘）
+/// 4. 招牌拍打动效：下按手臂 ↔ 抬臂翻掌露粉嫩肉垫 (1大3小 🐾)
+/// 5. 透视角度机械键盘 + 滚轮小鼠标
+/// 6. 全局强力过滤 Emoji 乱码，气泡与图标采用 100% GDI+ 原生矢量绘制，彻底杜绝 ▯ 方框
 /// </summary>
 public class DesktopPetForm : Form
 {
@@ -41,7 +41,7 @@ public class DesktopPetForm : Form
     private string _prevState = "idle";
 
     // 气泡对话框 (支持高颜值玻璃拟态、多行自适应卡片与纯矢量图标)
-    private string _bubbleText = "今天也要元气满满写代码哦！✨";
+    private string _bubbleText = "今天也要元气满满写代码哦！";
     private int _bubbleFadeTicks = 180; // 约 6 秒
     private RectangleF _bubbleCloseRect = RectangleF.Empty;
     private float _renderedBubbleBottom = 0;
@@ -51,12 +51,12 @@ public class DesktopPetForm : Form
 
     private readonly string[] _idleQuotes = new[]
     {
-        "代码写累了吗？记得喝口水哦~ 🍵",
-        "网关正在全天候守护您的 API 链路！⚡",
-        "今天也是效率拉满的一天！🚀",
-        "点击我可以切换专属鼓励语哦~ ✨",
-        "喵~ 趴着打个盹，随时为您敲键盘！🐾",
-        "Claude / Codex 链路畅通无阻！⚡"
+        "代码写累了吗？记得喝口水哦~",
+        "网关正在全天候守护您的 API 链路！",
+        "今天也是效率拉满的一天！",
+        "点击我可以切换专属鼓励语哦~",
+        "喵~ 趴着打个盹，随时为您敲键盘！",
+        "Claude / Codex 链路畅通无阻！"
     };
 
     private static Rectangle GetWorkingArea()
@@ -115,9 +115,9 @@ public class DesktopPetForm : Form
     private void InitContextMenu()
     {
         var menu = new ContextMenuStrip();
-        var bongoItem = new ToolStripMenuItem("🐱 切换为原版经典 Bongo Cat", null, (s, e) => { _avatar = "bongo"; ShowBubble("经典 Bongo 敲键盘猫就位！🐾"); });
-        var cyberItem = new ToolStripMenuItem("🤖 切换为赛博机甲猫", null, (s, e) => { _avatar = "cyber"; ShowBubble("赛博机甲已连接！⚡"); });
-        var dogItem = new ToolStripMenuItem("🐶 切换为忠诚柴犬", null, (s, e) => { _avatar = "dog"; ShowBubble("汪汪！柴犬为您护航~ ✨"); });
+        var bongoItem = new ToolStripMenuItem("🐱 切换为原版经典 Bongo Cat", null, (s, e) => { _avatar = "bongo"; ShowBubble("经典 Bongo 敲键盘猫就位！"); });
+        var cyberItem = new ToolStripMenuItem("🤖 切换为赛博机甲猫", null, (s, e) => { _avatar = "cyber"; ShowBubble("赛博机甲已连接！"); });
+        var dogItem = new ToolStripMenuItem("🐶 切换为忠诚柴犬", null, (s, e) => { _avatar = "dog"; ShowBubble("汪汪！柴犬为您护航~"); });
 
         var soundItem = new ToolStripMenuItem("🔊 提示音开关", null, (s, e) => {
             _trayManager.IsSoundEnabled = !_trayManager.IsSoundEnabled;
@@ -146,10 +146,19 @@ public class DesktopPetForm : Form
 
     public void ShowBubble(string text, int durationMs = 6000)
     {
-        // 过滤清理所有不可见 Unicode Variation Selectors (\uFE0F / \uFE0E)
-        _bubbleText = text.Replace("\uFE0F", "").Replace("\uFE0E", "").Trim();
+        // 全局彻底剥除所有 Unicode Emoji 与变体字符 (\uFE0F / \uFE0E / Surrogate Pairs)，100% 根绝 ▯ 方框
+        _bubbleText = SanitizeString(text);
         _bubbleFadeTicks = durationMs / 33;
         Invalidate();
+    }
+
+    private static string SanitizeString(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "";
+        return System.Text.RegularExpressions.Regex.Replace(
+            raw,
+            @"[\uD800-\uDFFF]|[\u2600-\u27BF]|[\u2300-\u23FF]|\p{So}|\p{Cs}|\uFE0F|\uFE0E",
+            "").Trim();
     }
 
     private void OnAnimationTick(object? sender, EventArgs e)
@@ -176,7 +185,7 @@ public class DesktopPetForm : Form
             // 获取实时状态
             var status = _alertService.GetCurrentTaskStatus();
 
-            // 智能状态变迁与实时气泡同步展示（支持多行完整详细信息）
+            // 智能状态变迁与实时气泡同步展示（纯净文本 + 矢量图标）
             if (status.State == "thinking")
             {
                 if (_prevState != "thinking" && _prevState != "tool_use")
@@ -198,7 +207,7 @@ public class DesktopPetForm : Form
             {
                 if (_prevState == "thinking" || _prevState == "tool_use")
                 {
-                    _celebrateTicks = 120; // 喝水休息撒花 4 秒
+                    _celebrateTicks = 120; // 喝水休息 4 秒
                     var totalMs = status.SessionDurationMs > 0 ? status.SessionDurationMs : status.DurationMs;
                     var durSec = totalMs / 1000.0;
                     var durText = durSec >= 60 ? $"{(int)(durSec / 60)}分{(int)(durSec % 60)}秒" : $"{durSec:F1}s";
@@ -436,7 +445,7 @@ public class DesktopPetForm : Form
             if (isThinking || isToolUse)
             {
                 var totalElapsedSec = (int)(DateTime.Now - (status.SessionStartTime != DateTime.MinValue ? status.SessionStartTime : status.Timestamp)).TotalSeconds;
-                var badgeY = petRect.Y + 56 + 28; // 透视键盘底边直接吸附
+                var badgeY = petRect.Y + 54 + 28; // 透视键盘底边直接吸附
                 DrawTimerBadge(g, totalElapsedSec, status.TurnCount, isToolUse, badgeY);
             }
         }
@@ -447,10 +456,11 @@ public class DesktopPetForm : Form
     /// 100% 还原原版经典 Bongo Cat：
     /// - 软萌连体棉花糖猫咪轮廓（尖尖猫耳、圆润软颊、俏皮胡须）
     /// - 极简原版脸部：两颗纯黑豆豆眼 + 经典 :3 / ω 萌萌嘴
+    /// - 连体手臂（胳膊由胸肩自然延伸至小爪，绝非孤立漂浮圆点）
     /// - 键盘与鼠标：透视角度机械键盘 + 滚轮鼠标
-    /// - 经典抬爪肉垫：抬起的小爪子露出可爱的粉嫩肉垫 (1大3小 🐾)
-    /// - 喝茶/喝水态：捧着冒热气的小杯子喝水，周围漂浮爱心 ❤️
-    /// - 空闲态：软萌趴在桌面上闭眼打盹 ( ˘ω˘ )
+    /// - 经典抬臂肉垫：抬起手臂露出可爱的粉嫩肉垫 (1大3小 🐾)
+    /// - 喝茶/喝水态：双手双臂抱起冒热气的小杯子喝水，周围漂浮爱心 ❤️
+    /// - 空闲态：双臂自然搭在键盘上闭眼趴着打盹 ( ˘ω˘ )
     /// </summary>
     private void DrawBongoCat(Graphics g, Rectangle r, bool isThinking, bool isToolUse, bool isCompleted)
     {
@@ -463,12 +473,12 @@ public class DesktopPetForm : Form
         using var whiteBrush = new SolidBrush(Color.White);
         using var pinkBrush = new SolidBrush(Color.FromArgb(244, 114, 182)); // 粉嫩肉垫色 #F472B6
 
-        var deskY = r.Y + 56;
+        var deskY = r.Y + 54;
 
         // 1. 绘制原版经典连体猫咪轮廓 (一气呵成的棉花糖猫头与身体)
         var catPath = new GraphicsPath();
         catPath.StartFigure();
-        // 从左下身体开始
+        // 从左下肩膀开始
         catPath.AddLine(r.X + 16, deskY + 6, r.X + 18, cy + 28);
         // 左脸颊微鼓
         catPath.AddBezier(
@@ -549,20 +559,20 @@ public class DesktopPetForm : Form
         // 4. 绘制透视键盘与鼠标 (原版桌面透视感)
         DrawAuthenticKeyboardAndMouse(g, r.X + 10, deskY, blackPen, thinPen, whiteBrush);
 
-        // 5. 绘制招牌 Bongo 爪爪与动作
+        // 5. 绘制招牌 Bongo 连体手臂与动作
         if (isCompleted)
         {
-            // 🍵【完成态】：双手捧着冒热气的马克杯喝水 + 漂浮爱心 ❤️
+            // 🍵【完成态】：双臂连体抱起冒热气的马克杯喝水 + 漂浮爱心 ❤️
             DrawAuthenticDrinkingCat(g, r.X, cy, deskY, blackPen, thinPen, whiteBrush);
         }
         else if (isToolUse)
         {
-            // 🔍【工具态】：左爪搭键盘，右爪举放大镜
-            DrawMittenPaw(g, r.X + 32, deskY + 6, blackPen, whiteBrush);
+            // 🔍【工具态】：左臂搭键盘，右臂举放大镜
+            DrawCatArm(g, r.X + 22, cy + 28, r.X + 38, deskY + 6, r.X + 52, cy + 38, blackPen, whiteBrush);
 
-            var glassX = r.X + 94;
-            var glassY = cy + 12;
-            DrawRaisedPawWithBeans(g, glassX, glassY + 12, blackPen, whiteBrush, pinkBrush);
+            var glassX = r.X + 100;
+            var glassY = cy + 10;
+            DrawRaisedCatArmWithBeans(g, false, r.X + 116, cy + 28, glassX, glassY + 12, r.X + 82, cy + 38, blackPen, whiteBrush, pinkBrush);
 
             using var glassPen = new Pen(Color.FromArgb(99, 102, 241), 2.4f);
             g.DrawEllipse(glassPen, glassX - 4, glassY - 4, 15, 15);
@@ -570,27 +580,26 @@ public class DesktopPetForm : Form
         }
         else if (isThinking)
         {
-            // ⚡【思考态】：招牌 Bongo 极速交替拍打！
-            // 一只手按键盘 (Mitten Paw)，另一只手抬起露出粉嫩肉垫 (Toe Beans Paw)！
+            // ⚡【思考态】：招牌 Bongo 连体手臂极速交替拍打！
             var beat = (_tickCount / 3) % 2; // 0 或 1 节拍交替
             if (beat == 0)
             {
-                // 左爪下按，右爪抬起露出粉嫩肉垫 🐾
-                DrawMittenPaw(g, r.X + 30, deskY + 4, blackPen, whiteBrush);
-                DrawRaisedPawWithBeans(g, r.X + 96, cy + 16, blackPen, whiteBrush, pinkBrush);
+                // 左臂下按在键盘上，右臂抬起露出粉嫩肉垫 🐾
+                DrawCatArm(g, r.X + 22, cy + 28, r.X + 38, deskY + 6, r.X + 52, cy + 38, blackPen, whiteBrush);
+                DrawRaisedCatArmWithBeans(g, false, r.X + 116, cy + 28, r.X + 100, cy + 12, r.X + 82, cy + 38, blackPen, whiteBrush, pinkBrush);
             }
             else
             {
-                // 左爪抬起露出粉嫩肉垫 🐾，右爪下按
-                DrawRaisedPawWithBeans(g, r.X + 22, cy + 16, blackPen, whiteBrush, pinkBrush);
-                DrawMittenPaw(g, r.X + 80, deskY + 4, blackPen, whiteBrush);
+                // 左臂抬起露出粉嫩肉垫 🐾，右臂下按在键盘上
+                DrawRaisedCatArmWithBeans(g, true, r.X + 24, cy + 28, r.X + 40, cy + 12, r.X + 58, cy + 38, blackPen, whiteBrush, pinkBrush);
+                DrawCatArm(g, r.X + 118, cy + 28, r.X + 92, deskY + 6, r.X + 78, cy + 38, blackPen, whiteBrush);
             }
         }
         else
         {
-            // 🐾【空闲态】：软萌趴在桌面上，两只小圆爪搭在键盘上方
-            DrawMittenPaw(g, r.X + 32, deskY + 6, blackPen, whiteBrush);
-            DrawMittenPaw(g, r.X + 78, deskY + 6, blackPen, whiteBrush);
+            // 🐾【空闲态】：两只连体手臂自然从肩膀延伸，软萌搭在键盘上方打盹
+            DrawCatArm(g, r.X + 22, cy + 28, r.X + 38, deskY + 6, r.X + 52, cy + 38, blackPen, whiteBrush);
+            DrawCatArm(g, r.X + 118, cy + 28, r.X + 92, deskY + 6, r.X + 78, cy + 38, blackPen, whiteBrush);
             DrawSleepZz(g, r.X + 112, (int)cy - 6);
         }
     }
@@ -640,30 +649,63 @@ public class DesktopPetForm : Form
     }
 
     /// <summary>
-    /// 绘制下按在键盘上的小肉爪 (Mitten Paw)
+    /// 绘制自然连体的猫咪手臂与小肉爪 (从肩膀延伸至键盘)
     /// </summary>
-    private void DrawMittenPaw(Graphics g, float x, float y, Pen blackPen, Brush whiteBrush)
+    private void DrawCatArm(Graphics g, float shoulderX, float shoulderY, float pawX, float pawY, float innerChestX, float innerChestY, Pen blackPen, Brush whiteBrush)
     {
-        g.FillEllipse(whiteBrush, x, y, 22, 16);
-        g.DrawEllipse(blackPen, x, y, 22, 16);
+        using var armPath = new GraphicsPath();
+        armPath.StartFigure();
+        // 外侧手臂轮廓：从肩膀延伸至爪子外缘
+        armPath.AddBezier(
+            new PointF(shoulderX, shoulderY),
+            new PointF(shoulderX + (pawX - shoulderX) * 0.4f, shoulderY + (pawY - shoulderY) * 0.6f),
+            new PointF(pawX - 6, pawY - 4),
+            new PointF(pawX, pawY));
+        // 圆润小肉爪端部
+        armPath.AddArc(pawX - 10, pawY - 8, 20, 16, 0, 180);
+        // 内侧手臂轮廓：从爪子返回胸口
+        armPath.AddBezier(
+            new PointF(pawX - 10, pawY),
+            new PointF(innerChestX - (innerChestX - pawX) * 0.4f, innerChestY + (pawY - innerChestY) * 0.4f),
+            new PointF(innerChestX, innerChestY + 4),
+            new PointF(innerChestX, innerChestY));
+        armPath.CloseFigure();
+
+        g.FillPath(whiteBrush, armPath);
+        g.DrawPath(blackPen, armPath);
     }
 
     /// <summary>
-    /// 绘制抬起的小爪爪并展示粉嫩肉垫 (Toe Beans Paw 🐾)
+    /// 绘制向上抬起的连体手臂与粉嫩肉垫 (带完整手臂连结到胸肩 🐾)
     /// </summary>
-    private void DrawRaisedPawWithBeans(Graphics g, float x, float y, Pen blackPen, Brush whiteBrush, Brush pinkBrush)
+    private void DrawRaisedCatArmWithBeans(Graphics g, bool isLeft, float shoulderX, float shoulderY, float pawX, float pawY, float innerChestX, float innerChestY, Pen blackPen, Brush whiteBrush, Brush pinkBrush)
     {
-        // 爪子轮廓 (圆润白底)
-        g.FillEllipse(whiteBrush, x, y, 22, 24);
-        g.DrawEllipse(blackPen, x, y, 22, 24);
+        using var armPath = new GraphicsPath();
+        armPath.StartFigure();
+        // 外侧手臂线条向上延伸
+        armPath.AddBezier(
+            new PointF(shoulderX, shoulderY),
+            new PointF(shoulderX + (isLeft ? -4 : 4), shoulderY - 8),
+            new PointF(pawX + (isLeft ? -10 : 10), pawY + 6),
+            new PointF(pawX, pawY - 4));
+        // 肉爪顶部弧形
+        armPath.AddArc(pawX - 11, pawY - 10, 22, 20, 180, 180);
+        // 内侧手臂线条返回胸部
+        armPath.AddBezier(
+            new PointF(pawX + 11, pawY),
+            new PointF(innerChestX + (isLeft ? 6 : -6), innerChestY - 8),
+            new PointF(innerChestX, innerChestY - 2),
+            new PointF(innerChestX, innerChestY));
+        armPath.CloseFigure();
 
-        // 中央大肉垫
-        g.FillEllipse(pinkBrush, x + 5.5f, y + 10, 11, 9);
+        g.FillPath(whiteBrush, armPath);
+        g.DrawPath(blackPen, armPath);
 
-        // 上方 3 颗萌萌小肉垫豆豆
-        g.FillEllipse(pinkBrush, x + 3, y + 4, 4.5f, 4.5f);
-        g.FillEllipse(pinkBrush, x + 8.5f, y + 2, 5f, 5f);
-        g.FillEllipse(pinkBrush, x + 14.5f, y + 4, 4.5f, 4.5f);
+        // 绘制粉嫩小肉垫 (1大肉心 + 3颗小肉豆豆)
+        g.FillEllipse(pinkBrush, pawX - 5.5f, pawY + 1, 11, 8.5f);
+        g.FillEllipse(pinkBrush, pawX - 7.5f, pawY - 5, 4.5f, 4.5f);
+        g.FillEllipse(pinkBrush, pawX - 2.2f, pawY - 7, 4.8f, 4.8f);
+        g.FillEllipse(pinkBrush, pawX + 3.2f, pawY - 5, 4.5f, 4.5f);
     }
 
     /// <summary>
@@ -705,9 +747,9 @@ public class DesktopPetForm : Form
         g.DrawArc(handlePen, cupX + 20, cupY + 3, 7, 12, -80, 160);
         g.DrawArc(blackPen, cupX + 20, cupY + 3, 7, 12, -80, 160);
 
-        // 3. 双爪抱杯
-        DrawMittenPaw(g, cupX - 10, cupY + 3, blackPen, whiteBrush);
-        DrawMittenPaw(g, cupX + 14, cupY + 3, blackPen, whiteBrush);
+        // 3. 连体手臂抱杯
+        DrawCatArm(g, rx + 24, cy + 28, cupX - 4, cupY + 6, rx + 44, cy + 38, blackPen, whiteBrush);
+        DrawCatArm(g, rx + 116, cy + 28, cupX + 28, cupY + 6, rx + 96, cy + 38, blackPen, whiteBrush);
 
         // 4. 浮动爱心 ❤️ (原版图片同款)
         DrawFloatingHeart(g, rx + 108, (int)cy - 4, pinkHeartBrush);
@@ -801,13 +843,12 @@ public class DesktopPetForm : Form
     }
 
     /// <summary>
-    /// 绘制高颜值暗色玻璃拟态气泡对话框（使用 100% 纯矢量图标，彻底消除 ▯ 乱码方框）
+    /// 绘制高颜值暗色玻璃拟态气泡对话框（使用 100% 纯矢量图标，全局清洗 Emoji 彻底消除 ▯ 乱码方框）
     /// </summary>
     private void DrawSpeechBubble(Graphics g, string rawText)
     {
-        // 1. 彻底清理前缀 Emojis 与 Unicode 变体选择符 (\uFE0F / \uFE0E)
-        var cleanMessage = System.Text.RegularExpressions.Regex.Replace(rawText, @"^([⚡🔍🎉⚠️🍵🚀✨🐱🐶🤖🦾💬]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|\uFE0F|\uFE0E)+\s*", "").Trim();
-        cleanMessage = cleanMessage.Replace("\uFE0F", "").Replace("\uFE0E", "").Trim();
+        // 1. 全局彻底清理所有 Unicode Emojis 与变体选择符 (\uFE0F / \uFE0E)
+        var cleanMessage = SanitizeString(rawText);
 
         // 2. 智能识别图标类型并准备纯矢量绘制
         var iconType = "chat";

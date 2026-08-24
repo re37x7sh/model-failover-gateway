@@ -153,8 +153,8 @@
             <line x1="110" y1="71" x2="126" y2="71" stroke="#94a3b8" stroke-width="1.2" />
           </g>
 
-          <!-- 5. 核心动作分流 -->
-          <!-- 🍵 完成态：双手捧热茶杯 + 漂浮爱心 ❤️ -->
+          <!-- 5. 核心动作分流 (连体手臂 + 肉爪) -->
+          <!-- 🍵 完成态：连体双手捧热茶杯 + 漂浮爱心 ❤️ -->
           <g v-if="taskStatus.state === 'completed'" class="drinking-tea-group">
             <!-- 蒸汽上升波浪 -->
             <path d="M64 42 Q60 36 66 30 Q62 24 66 18" stroke="rgba(255,255,255,0.75)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-1" />
@@ -162,39 +162,38 @@
             <!-- 马克杯 -->
             <rect x="58" y="44" width="24" height="20" rx="4" fill="#38bdf8" stroke="#1e293b" stroke-width="2" />
             <path d="M82 48 Q90 48 90 56 Q90 64 82 64" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round" />
-            <!-- 双爪抱杯 -->
-            <ellipse cx="52" cy="56" rx="8" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
-            <ellipse cx="88" cy="56" rx="8" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <!-- 连体双臂抱杯 -->
+            <path d="M 24,40 C 26,54 38,62 54,60 C 60,60 58,48 54,44 C 44,44 32,38 24,40 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <path d="M 122,40 C 120,54 108,62 92,60 C 86,60 88,48 92,44 C 102,44 114,38 122,40 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
             <!-- 浮动爱心 -->
             <path d="M 116,14 C 112,8 106,12 110,18 L 116,24 L 122,18 C 126,12 120,8 116,14 Z" fill="#f43f5e" class="bongo-heart" />
           </g>
-          <!-- ⚡ 思考态：招牌 Bongo 极速交替拍打 (下按肉爪 ↔ 抬爪露出粉嫩肉垫 🐾) -->
+          <!-- ⚡ 思考态：招牌 Bongo 连体手臂极速交替拍打 (下按手臂 ↔ 抬臂翻掌露出粉嫩肉垫 🐾) -->
           <g v-else-if="taskStatus.state === 'thinking'" class="bongo-authentic-paws">
-            <!-- 左爪下按，右爪抬起露出粉嫩肉垫 -->
-            <g class="paw-group-l">
-              <ellipse cx="36" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
-            </g>
+            <!-- 左臂下按在键盘上 -->
+            <path d="M 22,38 C 22,54 26,68 40,68 C 50,68 50,56 50,46 C 40,46 28,36 22,38 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <!-- 右臂向上抬起露出粉嫩肉垫 🐾 -->
             <g class="paw-group-r">
-              <ellipse cx="102" cy="40" rx="11" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+              <path d="M 124,38 C 126,24 118,14 104,14 C 92,14 90,26 94,36 C 100,42 114,42 124,38 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
               <!-- 肉垫大肉心 -->
-              <ellipse cx="102" cy="44" rx="5.5" ry="4.5" fill="#f472b6" />
+              <ellipse cx="104" cy="24" rx="5" ry="4" fill="#f472b6" />
               <!-- 3颗小肉垫豆豆 -->
-              <circle cx="97" cy="37" r="2.2" fill="#f472b6" />
-              <circle cx="102" cy="35" r="2.4" fill="#f472b6" />
-              <circle cx="107" cy="37" r="2.2" fill="#f472b6" />
+              <circle cx="98" cy="18" r="2" fill="#f472b6" />
+              <circle cx="104" cy="16" r="2.2" fill="#f472b6" />
+              <circle cx="110" cy="18" r="2" fill="#f472b6" />
             </g>
           </g>
           <!-- 🔍 工具态 (举放大镜) -->
           <g v-else-if="taskStatus.state === 'tool_use'">
-            <ellipse cx="36" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <path d="M 22,38 C 22,54 26,68 40,68 C 50,68 50,56 50,46 C 40,46 28,36 22,38 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
             <ellipse cx="98" cy="46" rx="11" ry="9" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
             <circle cx="105" cy="34" r="7" stroke="#6366f1" stroke-width="2.5" fill="none" />
             <line x1="110" y1="39" x2="116" y2="45" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" />
           </g>
-          <!-- 🐾 默认空闲态 (趴在桌面上软萌打盹) -->
+          <!-- 🐾 默认空闲态 (两只连体手臂从肩膀自然伸出搭在键盘上) -->
           <g v-else class="idle-authentic-paws">
-            <ellipse cx="38" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
-            <ellipse cx="86" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <path d="M 22,38 C 22,54 26,68 40,68 C 50,68 50,56 50,46 C 40,46 28,36 22,38 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <path d="M 124,38 C 124,54 120,68 106,68 C 96,68 96,56 96,46 C 106,46 118,36 124,38 Z" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
           </g>
         </svg>
       </div>
