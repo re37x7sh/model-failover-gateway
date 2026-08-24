@@ -107,10 +107,17 @@
           
           <!-- 眼睛 -->
           <g v-if="taskStatus.state === 'completed'">
+            <!-- 喝水满足笑弯眼 ^ ^ -->
             <path d="M38 42 Q46 32 54 42" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" />
             <path d="M66 42 Q74 32 82 42" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" />
           </g>
+          <g v-else-if="taskStatus.state === 'idle'">
+            <!-- 趴着打盹休息闭眼 ( - ‿ - ) -->
+            <path d="M38 43 Q46 36 54 43" stroke="#1e293b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+            <path d="M66 43 Q74 36 82 43" stroke="#1e293b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+          </g>
           <g v-else>
+            <!-- 思考/工作态水灵豆豆眼 -->
             <circle cx="46" cy="42" r="5" fill="#1e293b" />
             <circle cx="74" cy="42" r="5" fill="#1e293b" />
             <circle cx="48" cy="40" r="1.8" fill="#ffffff" />
@@ -119,7 +126,7 @@
           
           <!-- 嘴巴与小粉鼻 -->
           <polygon points="57,48 63,48 60,52" fill="#fda4af" />
-          <path d="M52 50 Q60 56 60 50 Q60 56 68 50" stroke="#1e293b" stroke-width="2.2" fill="none" stroke-linecap="round" />
+          <path v-if="taskStatus.state !== 'completed'" d="M52 50 Q60 56 60 50 Q60 56 68 50" stroke="#1e293b" stroke-width="2.2" fill="none" stroke-linecap="round" />
           
           <!-- 木质小桌面与键盘 -->
           <rect x="10" y="68" width="100" height="22" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" />
@@ -129,28 +136,36 @@
           <rect x="60" y="75" width="8" height="8" rx="1" fill="#ec4899" />
           <rect x="72" y="75" width="8" height="8" rx="1" fill="#22c55e" />
           
-          <!-- 双爪动作分流 -->
-          <!-- 欢呼状态 -->
-          <g v-if="taskStatus.state === 'completed'">
-            <ellipse cx="25" cy="20" rx="9" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="cheer-paw-l" />
-            <ellipse cx="95" cy="20" rx="9" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="cheer-paw-r" />
+          <!-- 核心动作分流 -->
+          <!-- 🍵 1. 完成态：端起小茶杯喝水冒热气 -->
+          <g v-if="taskStatus.state === 'completed'" class="drinking-tea-group">
+            <!-- 蒸汽上升动画 -->
+            <path d="M54 48 Q50 42 56 36 Q52 30 56 24" stroke="rgba(255,255,255,0.7)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-1" />
+            <path d="M66 48 Q70 42 64 36 Q68 30 64 24" stroke="rgba(255,255,255,0.7)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-2" />
+            <!-- 水杯主体与把手 -->
+            <rect x="48" y="50" width="24" height="20" rx="4" fill="#38bdf8" stroke="#1e293b" stroke-width="2" />
+            <path d="M72 54 Q80 54 80 62 Q80 70 72 70" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round" />
+            <ellipse cx="60" cy="50" rx="12" ry="3" fill="#e0f2fe" stroke="#1e293b" stroke-width="1.5" />
+            <!-- 双手捧杯爪爪 -->
+            <ellipse cx="44" cy="62" rx="7" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <ellipse cx="76" cy="62" rx="7" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
           </g>
-          <!-- 敲键盘状态 (极速交替拍打) -->
+          <!-- ⚡ 2. 敲键盘状态 (极速交替拍打) -->
           <g v-else-if="taskStatus.state === 'thinking'" class="bongo-typing-paws">
             <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-paw-l" />
             <ellipse cx="84" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-paw-r" />
           </g>
-          <!-- 工具态 (举放大镜) -->
+          <!-- 🔍 3. 工具态 (举放大镜) -->
           <g v-else-if="taskStatus.state === 'tool_use'">
             <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
             <ellipse cx="88" cy="46" rx="10" ry="9" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
             <circle cx="95" cy="35" r="7" stroke="#6366f1" stroke-width="2.5" fill="none" />
             <line x1="100" y1="40" x2="106" y2="46" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" />
           </g>
-          <!-- 默认空闲 -->
-          <g v-else>
-            <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
-            <ellipse cx="84" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+          <!-- 🐾 4. 默认空闲态 (趴在桌面上软萌打盹) -->
+          <g v-else class="idle-sleeping-paws">
+            <ellipse cx="34" cy="76" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+            <ellipse cx="86" cy="76" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
           </g>
         </svg>
       </div>

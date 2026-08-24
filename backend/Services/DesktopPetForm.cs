@@ -8,8 +8,13 @@ using ModelFailoverGateway.Models;
 namespace ModelFailoverGateway.Services;
 
 /// <summary>
-/// Windows 原生置顶·贴边吸附隐藏·经典 Bongo Cat 敲键盘灵动桌面宠物
-/// 支持双爪交替敲击、工具态放大镜、欢呼撒花、多行高保真气泡卡片与紧凑贴合状态底座
+/// Windows 原生置顶·贴边吸附隐藏·经典 Bongo Cat 灵动桌面宠物
+/// 状态驱动形态：
+/// 1. 空闲态 (Idle): 趴在桌面上软萌打盹休息的猫咪 (微弱呼吸起伏)
+/// 2. 思考态 (Thinking): 招牌飞速交替敲键盘的 Bongo Cat
+/// 3. 工具态 (Tool Use): 专注举起放大镜探查的猫咪
+/// 4. 完成态 (Completed): 端起冒着热气的小茶杯开心喝水喝茶的猫咪 🍵
+/// 气泡与图标采用 100% 矢量图标渲染，彻底杜绝 Unicode 字体缺字方框乱码 ▯
 /// </summary>
 public class DesktopPetForm : Form
 {
@@ -34,8 +39,8 @@ public class DesktopPetForm : Form
     private int _celebrateTicks = 0;
     private string _prevState = "idle";
 
-    // 气泡对话框 (支持高颜值玻璃拟态、多行自适应卡片与实时状态提示)
-    private string _bubbleText = "今天也要元气满满写代码哦！✨";
+    // 气泡对话框 (支持高颜值玻璃拟态、多行自适应卡片与纯矢量图标)
+    private string _bubbleText = "今天也要元气满满写代码哦！";
     private int _bubbleFadeTicks = 180; // 约 6 秒
     private RectangleF _bubbleCloseRect = RectangleF.Empty;
     private float _renderedBubbleBottom = 0;
@@ -45,12 +50,12 @@ public class DesktopPetForm : Form
 
     private readonly string[] _idleQuotes = new[]
     {
-        "🍵 代码写累了吗？记得喝口水哦~",
-        "⚡ 网关正在全天候守护您的 API 链路！",
-        "🚀 今天也是效率拉满的一天！",
-        "✨ 点击我可以切换专属鼓励语哦~",
-        "🐱 喵~ 随时准备为您敲键盘！",
-        "⚡ Claude / Codex 链路畅通无阻！"
+        "代码写累了吗？记得喝口水哦~ 🍵",
+        "网关正在全天候守护您的 API 链路！⚡",
+        "今天也是效率拉满的一天！🚀",
+        "点击我可以切换专属鼓励语哦~ ✨",
+        "喵~ 趴着打个盹，随时为您敲键盘！🐾",
+        "Claude / Codex 链路畅通无阻！⚡"
     };
 
     private static Rectangle GetWorkingArea()
@@ -75,7 +80,7 @@ public class DesktopPetForm : Form
         _alertService = alertService;
         _trayManager = trayManager;
 
-        // 窗体基础属性 (扩充到 250x220 确保多行气泡与底部徽章完整展示且紧凑)
+        // 窗体基础属性 (250x220 保证多行气泡与底部徽章完整展示且紧凑)
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
@@ -92,7 +97,7 @@ public class DesktopPetForm : Form
         var wa = GetWorkingArea();
         Location = new Point(wa.Right - 260, wa.Bottom - 240);
 
-        // 动画刷新定时器 (33ms 约 30 FPS，实现丝滑 Bongo 拍打节奏)
+        // 动画刷新定时器 (33ms 约 30 FPS，实现丝滑 Bongo 拍打与喝茶蒸汽动效)
         _animTimer = new System.Windows.Forms.Timer { Interval = 33 };
         _animTimer.Tick += OnAnimationTick;
         _animTimer.Start();
@@ -109,9 +114,9 @@ public class DesktopPetForm : Form
     private void InitContextMenu()
     {
         var menu = new ContextMenuStrip();
-        var bongoItem = new ToolStripMenuItem("🐱 切换为 Bongo Cat 敲鼓猫", null, (s, e) => { _avatar = "bongo"; ShowBubble("经典 Bongo 敲键盘猫就位！🐾"); });
-        var cyberItem = new ToolStripMenuItem("🤖 切换为赛博机甲猫", null, (s, e) => { _avatar = "cyber"; ShowBubble("赛博机甲已连接！⚡"); });
-        var dogItem = new ToolStripMenuItem("🐶 切换为忠诚柴犬", null, (s, e) => { _avatar = "dog"; ShowBubble("汪汪！柴犬为您护航~ ✨"); });
+        var bongoItem = new ToolStripMenuItem("🐱 切换为 Bongo Cat 敲鼓猫", null, (s, e) => { _avatar = "bongo"; ShowBubble("经典 Bongo 敲键盘猫就位！"); });
+        var cyberItem = new ToolStripMenuItem("🤖 切换为赛博机甲猫", null, (s, e) => { _avatar = "cyber"; ShowBubble("赛博机甲已连接！"); });
+        var dogItem = new ToolStripMenuItem("🐶 切换为忠诚柴犬", null, (s, e) => { _avatar = "dog"; ShowBubble("汪汪！柴犬为您护航~"); });
 
         var soundItem = new ToolStripMenuItem("🔊 提示音开关", null, (s, e) => {
             _trayManager.IsSoundEnabled = !_trayManager.IsSoundEnabled;
@@ -140,7 +145,8 @@ public class DesktopPetForm : Form
 
     public void ShowBubble(string text, int durationMs = 6000)
     {
-        _bubbleText = text;
+        // 过滤清理所有不可见 Unicode Variation Selectors (\uFE0F / \uFE0E)
+        _bubbleText = text.Replace("\uFE0F", "").Replace("\uFE0E", "").Trim();
         _bubbleFadeTicks = durationMs / 33;
         Invalidate();
     }
@@ -176,7 +182,7 @@ public class DesktopPetForm : Form
                 {
                     var turnTip = status.TurnCount > 1 ? $" (第 {status.TurnCount} 步)" : "";
                     var modelTip = !string.IsNullOrEmpty(status.Model) ? $"\n模型: {status.Model}" : "";
-                    ShowBubble($"⚡ 正在思考生成中...{turnTip}{modelTip}", 15000);
+                    ShowBubble($"正在思考生成中...{turnTip}{modelTip}", 15000);
                 }
             }
             else if (status.State == "tool_use")
@@ -184,14 +190,14 @@ public class DesktopPetForm : Form
                 if (_prevState != "tool_use")
                 {
                     var turnTip = status.TurnCount > 0 ? $" (第 {status.TurnCount} 步)" : "";
-                    ShowBubble($"🔍 正在调用工具处理中...{turnTip}", 10000);
+                    ShowBubble($"正在调用工具处理中...{turnTip}", 10000);
                 }
             }
             else if (status.State == "completed")
             {
                 if (_prevState == "thinking" || _prevState == "tool_use")
                 {
-                    _celebrateTicks = 90; // 庆祝撒花 3 秒
+                    _celebrateTicks = 120; // 喝水休息撒花 4 秒
                     var totalMs = status.SessionDurationMs > 0 ? status.SessionDurationMs : status.DurationMs;
                     var durSec = totalMs / 1000.0;
                     var durText = durSec >= 60 ? $"{(int)(durSec / 60)}分{(int)(durSec % 60)}秒" : $"{durSec:F1}s";
@@ -199,14 +205,14 @@ public class DesktopPetForm : Form
                         ? $"\n(累计 {status.SessionTotalTokens:N0} Tokens)" 
                         : (status.TotalTokens > 0 ? $"\n(消耗 {status.TotalTokens:N0} Tokens)" : "");
                     var turnInfo = status.TurnCount > 1 ? $"共 {status.TurnCount} 步，" : "";
-                    ShowBubble($"🎉 任务全部完成啦！\n{turnInfo}总耗时 {durText}{tokenStr}", 8000);
+                    ShowBubble($"任务全部完成啦！喝口水休息下~\n{turnInfo}总耗时 {durText}{tokenStr}", 8000);
                 }
             }
             else if (status.State == "failover")
             {
                 if (_prevState != "failover")
                 {
-                    ShowBubble($"⚠️ 触发渠道故障转移，已切换备用！", 6000);
+                    ShowBubble($"触发渠道故障转移，已切换备用！", 6000);
                 }
             }
 
@@ -379,7 +385,7 @@ public class DesktopPetForm : Form
         {
             var turnTip = status.TurnCount > 1 ? $" (第 {status.TurnCount} 步)" : "";
             var modelTip = !string.IsNullOrEmpty(status.Model) ? $"\n模型: {status.Model}" : "";
-            ShowBubble($"⚡ 正在思考生成中...{turnTip}{modelTip}", 5000);
+            ShowBubble($"正在思考生成中...{turnTip}{modelTip}", 5000);
         }
     }
 
@@ -396,7 +402,7 @@ public class DesktopPetForm : Form
             var isToolUse = status.State == "tool_use";
             var isCompleted = status.State == "completed" || _celebrateTicks > 0;
 
-            // 1. 绘制顶部高颜值气泡对话框（支持多行完整展示与 ✕ 关闭按钮）
+            // 1. 绘制顶部高颜值气泡对话框（纯矢量图标，彻底消除 ▯ 乱码）
             var hasBubble = _bubbleFadeTicks > 0 && !string.IsNullOrEmpty(_bubbleText);
             if (hasBubble)
             {
@@ -425,7 +431,7 @@ public class DesktopPetForm : Form
                 DrawDog(g, petRect, isThinking, isCompleted);
             }
 
-            // 3. 状态底座徽章：紧贴键盘桌面下方（仅向下偏移 18px），彻底消除下方大空隙！
+            // 3. 状态底座徽章：紧贴键盘桌面下方，消除下方大空隙
             if (isThinking || isToolUse)
             {
                 var totalElapsedSec = (int)(DateTime.Now - (status.SessionStartTime != DateTime.MinValue ? status.SessionStartTime : status.Timestamp)).TotalSeconds;
@@ -437,13 +443,20 @@ public class DesktopPetForm : Form
     }
 
     /// <summary>
-    /// 经典 Bongo Cat 敲键盘猫完整绘制逻辑
+    /// 经典 Bongo Cat 完整绘制：
+    /// - 空闲时：趴在桌面上软萌打盹 (眼睛温和微闭，微弱呼吸呼吸起伏)
+    /// - 思考时：飞速敲击键盘打字
+    /// - 工具时：右手举放大镜探查
+    /// - 完成时：端起冒着热气的小茶杯开心喝水喝茶 🍵
     /// </summary>
     private void DrawBongoCat(Graphics g, Rectangle r, bool isThinking, bool isToolUse, bool isCompleted)
     {
-        var jumpOffset = isCompleted ? (float)Math.Abs(Math.Sin(_tickCount * 0.45)) * 14f : 0f;
-        var earTwitch = (float)Math.Sin(_tickCount * 0.12) * 2.5f;
-        var cy = r.Y - jumpOffset;
+        var earTwitch = (float)Math.Sin(_tickCount * 0.12) * 2.2f;
+
+        // 空闲打盹时微弱呼吸浮动，思考/喝水时正常体态
+        var isIdle = !isThinking && !isToolUse && !isCompleted;
+        var breathingOffset = isIdle ? (float)Math.Sin(_tickCount * 0.08) * 1.5f : 0f;
+        var cy = isIdle ? r.Y + 6 + breathingOffset : r.Y;
 
         using var blackPen = new Pen(Color.FromArgb(30, 41, 59), 2.6f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
         using var whiteBrush = new SolidBrush(Color.FromArgb(255, 255, 255));
@@ -475,39 +488,40 @@ public class DesktopPetForm : Form
         g.FillEllipse(pinkBrush, r.X + 24, cy + 42, 14, 8);
         g.FillEllipse(pinkBrush, r.X + 82, cy + 42, 14, 8);
 
-        // 4. 眼睛
-        if (_isBlinking)
+        // 4. 眼睛（空闲打盹 / 喝水满足 / 思考专注）
+        if (isIdle)
+        {
+            // 趴着休息时：甜甜的闭眼睡眠弯线 ( - ‿ - )
+            using var sleepPen = new Pen(Color.FromArgb(30, 41, 59), 2.5f);
+            g.DrawArc(sleepPen, r.X + 36, cy + 34, 13, 8, 190, 160);
+            g.DrawArc(sleepPen, r.X + 71, cy + 34, 13, 8, 190, 160);
+        }
+        else if (isCompleted)
+        {
+            // 喝茶满足时：开心的笑眼弯弯 ^ ^
+            using var happyPen = new Pen(Color.FromArgb(30, 41, 59), 3f);
+            g.DrawArc(happyPen, r.X + 34, cy + 28, 15, 11, 200, 140);
+            g.DrawArc(happyPen, r.X + 71, cy + 28, 15, 11, 200, 140);
+        }
+        else if (_isBlinking)
         {
             // 眨眼闭眼线
             g.DrawArc(blackPen, r.X + 36, cy + 32, 12, 8, 190, 160);
             g.DrawArc(blackPen, r.X + 72, cy + 32, 12, 8, 190, 160);
         }
-        else if (isCompleted)
-        {
-            // 欢呼开心弯弯眼 ^ ^
-            using var happyPen = new Pen(Color.FromArgb(30, 41, 59), 3f);
-            g.DrawArc(happyPen, r.X + 34, cy + 26, 16, 12, 200, 140);
-            g.DrawArc(happyPen, r.X + 70, cy + 26, 16, 12, 200, 140);
-        }
         else
         {
-            // 经典黑色大水灵豆豆眼
+            // 思考/工作态：水灵灵的黑曜石大豆豆眼
             g.FillEllipse(Brushes.Black, r.X + 37, cy + 28, 11, 13);
             g.FillEllipse(Brushes.Black, r.X + 72, cy + 28, 11, 13);
-            // 眼睛高光闪亮小白点
+            // 眼睛高光小白点
             g.FillEllipse(Brushes.White, r.X + 39, cy + 30, 4, 4);
             g.FillEllipse(Brushes.White, r.X + 74, cy + 30, 4, 4);
         }
 
         // 5. 鼻子与嘴巴 (ω 形状)
         g.FillPolygon(pinkBrush, new PointF[] { new(r.X + 57, cy + 40), new(r.X + 63, cy + 40), new(r.X + 60, cy + 44) });
-        if (isCompleted)
-        {
-            // 开心张嘴笑
-            g.FillEllipse(pinkBrush, r.X + 54, cy + 45, 12, 10);
-            g.DrawEllipse(blackPen, r.X + 54, cy + 45, 12, 10);
-        }
-        else
+        if (!isCompleted)
         {
             g.DrawArc(blackPen, r.X + 51, cy + 42, 9, 8, 20, 150);
             g.DrawArc(blackPen, r.X + 60, cy + 42, 9, 8, 10, 150);
@@ -523,7 +537,6 @@ public class DesktopPetForm : Form
         // 迷你赛博键盘
         using var kbBrush = new SolidBrush(Color.FromArgb(30, 41, 59));
         g.FillRoundedRectangle(kbBrush, r.X + 26, deskY + 4, 68, 16, 4);
-        // 键盘上彩色小键帽
         var keyColors = new[] { Color.FromArgb(56, 189, 248), Color.FromArgb(168, 85, 247), Color.FromArgb(236, 72, 153), Color.FromArgb(34, 197, 94) };
         for (int i = 0; i < 4; i++)
         {
@@ -531,55 +544,43 @@ public class DesktopPetForm : Form
             g.FillRectangle(kBrush, r.X + 32 + i * 15, deskY + 7, 10, 8);
         }
 
-        // 7. Bongo Cat 核心灵魂：两只白色小肉爪拍打动画！
+        // 7. 核心动作分流：
         if (isCompleted)
         {
-            // 完成时：双爪举过头顶欢呼！
-            g.FillEllipse(whiteBrush, r.X + 16, cy + 2, 18, 22);
-            g.DrawEllipse(blackPen, r.X + 16, cy + 2, 18, 22);
-
-            g.FillEllipse(whiteBrush, r.X + 86, cy + 2, 18, 22);
-            g.DrawEllipse(blackPen, r.X + 86, cy + 2, 18, 22);
-
-            // 撒花彩带粒子
-            DrawConfetti(g, r, _tickCount);
+            // 🍵【完成态】：端起冒着热气的小茶杯开心喝水喝茶
+            DrawDrinkingTeaCat(g, r, cy, deskY);
         }
         else if (isToolUse)
         {
-            // 工具调用态：左手撑桌，右手举放大镜 🔍
+            // 🔍【工具态】：左手按桌，右手举放大镜
             g.FillEllipse(whiteBrush, r.X + 18, deskY - 4, 20, 16);
             g.DrawEllipse(blackPen, r.X + 18, deskY - 4, 20, 16);
 
-            // 右手举起放大镜
             var glassX = r.X + 86;
             var glassY = cy + 18;
             g.FillEllipse(whiteBrush, glassX - 4, glassY + 12, 18, 16);
             g.DrawEllipse(blackPen, glassX - 4, glassY + 12, 18, 16);
 
-            // 绘制小放大镜 🔍
             using var glassPen = new Pen(Color.FromArgb(99, 102, 241), 2.5f);
             g.DrawEllipse(glassPen, glassX, glassY, 14, 14);
             g.DrawLine(glassPen, glassX + 11, glassY + 11, glassX + 18, glassY + 18);
         }
         else if (isThinking)
         {
-            // 思考态：极速交替拍打打字 (6 帧一个节拍循环，啪嗒啪嗒敲键盘)
-            var beat = (_tickCount / 3) % 2; // 0 或 1 节拍
+            // ⚡【思考态】：飞速交替敲击键盘
+            var beat = (_tickCount / 3) % 2;
             var leftPawDown = beat == 0;
             var rightPawDown = beat == 1;
 
             var leftPawY = leftPawDown ? deskY + 1 : deskY - 10;
             var rightPawY = rightPawDown ? deskY + 1 : deskY - 10;
 
-            // 左肉爪
             g.FillEllipse(whiteBrush, r.X + 18, leftPawY, 20, 18);
             g.DrawEllipse(blackPen, r.X + 18, leftPawY, 20, 18);
 
-            // 右肉爪
             g.FillEllipse(whiteBrush, r.X + 82, rightPawY, 20, 18);
             g.DrawEllipse(blackPen, r.X + 82, rightPawY, 20, 18);
 
-            // 敲击键帽闪烁小火花
             var activeKeyX = leftPawDown ? r.X + 34 : r.X + 78;
             using var sparkBrush = new SolidBrush(Color.Gold);
             g.FillPolygon(sparkBrush, new PointF[] {
@@ -588,12 +589,100 @@ public class DesktopPetForm : Form
         }
         else
         {
-            // 待机态：双爪乖巧平放在小键盘上
-            g.FillEllipse(whiteBrush, r.X + 22, deskY + 2, 20, 16);
-            g.DrawEllipse(blackPen, r.X + 22, deskY + 2, 20, 16);
+            // 🐾【空闲态】：趴在桌面上软萌打盹，双爪乖巧贴在桌面上
+            g.FillEllipse(whiteBrush, r.X + 26, deskY + 3, 22, 15);
+            g.DrawEllipse(blackPen, r.X + 26, deskY + 3, 22, 15);
 
-            g.FillEllipse(whiteBrush, r.X + 78, deskY + 2, 20, 16);
-            g.DrawEllipse(blackPen, r.X + 78, deskY + 2, 20, 16);
+            g.FillEllipse(whiteBrush, r.X + 72, deskY + 3, 22, 15);
+            g.DrawEllipse(blackPen, r.X + 72, deskY + 3, 22, 15);
+
+            // 软萌 zZ 打盹小气泡
+            DrawSleepZz(g, r.X + 96, (int)cy - 6);
+        }
+    }
+
+    /// <summary>
+    /// 绘制端起小茶杯喝水喝茶的小猫 (带热气与双手捧杯)
+    /// </summary>
+    private void DrawDrinkingTeaCat(Graphics g, Rectangle r, float cy, int deskY)
+    {
+        using var blackPen = new Pen(Color.FromArgb(30, 41, 59), 2.4f);
+        using var whiteBrush = new SolidBrush(Color.White);
+        using var cupBrush = new SolidBrush(Color.FromArgb(56, 189, 248)); // #38BDF8 天蓝陶瓷杯
+        using var cupRimBrush = new SolidBrush(Color.FromArgb(224, 242, 254)); // 奶白杯口
+
+        // 喝水动作微弱轻晃
+        var sipOffset = (float)Math.Sin(_tickCount * 0.2) * 1.8f;
+        var cupX = r.X + 46;
+        var cupY = cy + 40 + sipOffset;
+
+        // 1. 热腾腾的蒸汽曲线 ~ ~
+        using var steamPen = new Pen(Color.FromArgb(180, 255, 255, 255), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        var s1 = (_tickCount * 0.12f) % 6.28f;
+        var s2 = ((_tickCount + 30) * 0.12f) % 6.28f;
+
+        g.DrawBezier(steamPen,
+            new PointF(cupX + 8, cupY - 2),
+            new PointF(cupX + 4 + (float)Math.Sin(s1) * 3, cupY - 10),
+            new PointF(cupX + 12 - (float)Math.Sin(s1) * 3, cupY - 16),
+            new PointF(cupX + 8, cupY - 22));
+
+        g.DrawBezier(steamPen,
+            new PointF(cupX + 20, cupY - 2),
+            new PointF(cupX + 16 + (float)Math.Sin(s2) * 3, cupY - 10),
+            new PointF(cupX + 24 - (float)Math.Sin(s2) * 3, cupY - 16),
+            new PointF(cupX + 20, cupY - 22));
+
+        // 2. 小茶杯主体
+        var cupRect = new RectangleF(cupX, cupY, 28, 22);
+        g.FillRoundedRectangle(cupBrush, cupRect, 6);
+        g.DrawRoundedRectangle(blackPen, cupRect, 6);
+
+        // 杯口白边
+        g.FillEllipse(cupRimBrush, cupX + 2, cupY - 2, 24, 6);
+        g.DrawEllipse(blackPen, cupX + 2, cupY - 2, 24, 6);
+
+        // 杯子侧边手柄
+        using var handlePen = new Pen(Color.FromArgb(56, 189, 248), 3f);
+        g.DrawArc(handlePen, cupX + 24, cupY + 4, 8, 12, -80, 160);
+        g.DrawArc(blackPen, cupX + 24, cupY + 4, 8, 12, -80, 160);
+
+        // 3. 双手捧着小茶杯
+        // 左肉爪
+        g.FillEllipse(whiteBrush, cupX - 10, cupY + 4, 16, 16);
+        g.DrawEllipse(blackPen, cupX - 10, cupY + 4, 16, 16);
+
+        // 右肉爪
+        g.FillEllipse(whiteBrush, cupX + 22, cupY + 4, 16, 16);
+        g.DrawEllipse(blackPen, cupX + 22, cupY + 4, 16, 16);
+
+        // 4. 周围柔和欢呼小星星粒子 ✨
+        DrawGentleSparkles(g, r.X + 60, (int)cy + 20);
+    }
+
+    private void DrawSleepZz(Graphics g, int x, int y)
+    {
+        var phase = (_tickCount % 90) / 90f;
+        var alpha = (int)(Math.Sin(phase * Math.PI) * 200);
+        if (alpha <= 10) return;
+
+        using var fontZ = new Font("Microsoft YaHei UI", 7.5f, FontStyle.Bold);
+        using var zBrush = new SolidBrush(Color.FromArgb(alpha, 148, 163, 184));
+        g.DrawString("zZ", fontZ, zBrush, x, y - phase * 14);
+    }
+
+    private void DrawGentleSparkles(Graphics g, int cx, int cy)
+    {
+        var colors = new[] { Color.Gold, Color.HotPink, Color.DeepSkyBlue, Color.LimeGreen };
+        for (int i = 0; i < 5; i++)
+        {
+            var angle = (_tickCount * 0.08 + i * 1.25);
+            var dist = 32 + (i * 7) % 20;
+            var px = cx + (float)Math.Cos(angle) * dist;
+            var py = cy + (float)Math.Sin(angle) * dist;
+
+            using var b = new SolidBrush(colors[i % colors.Length]);
+            g.FillEllipse(b, px, py, 4.5f, 4.5f);
         }
     }
 
@@ -625,7 +714,7 @@ public class DesktopPetForm : Form
         g.DrawRoundedRectangle(new Pen(Color.FromArgb(56, 189, 248), 1.5f), visorRect, 8);
 
         // 电子眼睛
-        if (_isBlinking)
+        if (_isBlinking || (!isThinking && !isCompleted))
         {
             g.DrawLine(new Pen(Color.FromArgb(56, 189, 248), 2.5f), r.X + 36, cy + 43, r.X + 48, cy + 43);
             g.DrawLine(new Pen(Color.FromArgb(56, 189, 248), 2.5f), r.X + 72, cy + 43, r.X + 84, cy + 43);
@@ -661,54 +750,40 @@ public class DesktopPetForm : Form
         g.FillEllipse(Brushes.Black, r.X + 55, cy + 44, 10, 8);
     }
 
-    private void DrawConfetti(Graphics g, Rectangle r, int tick)
-    {
-        var colors = new[] { Color.Gold, Color.DeepSkyBlue, Color.HotPink, Color.LimeGreen, Color.Coral };
-        for (int i = 0; i < 8; i++)
-        {
-            var angle = (tick * 0.15 + i * 0.8);
-            var dist = 36 + (i * 5) % 25;
-            var cx = r.X + 60 + (float)Math.Cos(angle) * dist;
-            var cy = r.Y + 25 + (float)Math.Sin(angle) * dist;
-
-            using var brush = new SolidBrush(colors[i % colors.Length]);
-            g.FillEllipse(brush, cx, cy, 6, 6);
-        }
-    }
-
     /// <summary>
-    /// 绘制高颜值暗色玻璃拟态气泡对话框（支持多行自适应、向下指示箭头与 ✕ 关闭按钮）
+    /// 绘制高颜值暗色玻璃拟态气泡对话框（使用 100% 纯矢量图标，彻底消除 ▯ 乱码方框）
     /// </summary>
-    private void DrawSpeechBubble(Graphics g, string text)
+    private void DrawSpeechBubble(Graphics g, string rawText)
     {
-        // 1. 分离前缀 Emoji 与文字内容，防止 GDI+ 缺少中文字体 Emoji 回退导致方框乱码 ▯
-        string icon = "";
-        string message = text;
+        // 1. 彻底清理前缀 Emojis 与 Unicode 变体选择符 (\uFE0F / \uFE0E)
+        var cleanMessage = System.Text.RegularExpressions.Regex.Replace(rawText, @"^([⚡🔍🎉⚠️🍵🚀✨🐱🐶🤖🦾💬]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|\uFE0F|\uFE0E)+\s*", "").Trim();
+        cleanMessage = cleanMessage.Replace("\uFE0F", "").Replace("\uFE0E", "").Trim();
 
-        var match = System.Text.RegularExpressions.Regex.Match(text, @"^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|\p{So}|\p{Cs})\s*");
-        if (match.Success)
-        {
-            icon = match.Groups[1].Value;
-            message = text.Substring(match.Length).Trim();
-        }
+        // 2. 智能识别图标类型并准备纯矢量绘制
+        var iconType = "chat";
+        if (rawText.Contains("故障") || rawText.Contains("转移") || rawText.Contains("402") || rawText.Contains("429") || rawText.Contains("失败"))
+            iconType = "warning";
+        else if (rawText.Contains("思考") || rawText.Contains("生成"))
+            iconType = "thinking";
+        else if (rawText.Contains("工具") || rawText.Contains("调用"))
+            iconType = "tool";
+        else if (rawText.Contains("完成") || rawText.Contains("搞定") || rawText.Contains("喝水"))
+            iconType = "completed";
 
         using var fontText = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Bold);
-        using var fontEmoji = new Font("Segoe UI Emoji", 8.5f);
 
-        var sizeEmoji = !string.IsNullOrEmpty(icon) ? g.MeasureString(icon, fontEmoji) : SizeF.Empty;
-        
-        // 测量文本多行尺寸（最大文本宽度 185px）
-        var maxTextW = 185f;
-        var sizeText = g.MeasureString(message, fontText, (int)maxTextW);
+        // 测量多行文本尺寸（最大文本宽度 180px）
+        var maxTextW = 180f;
+        var sizeText = g.MeasureString(cleanMessage, fontText, (int)maxTextW);
 
+        var iconWidth = 20f;
         var closeBtnWidth = 18f;
-        var totalContentWidth = (sizeEmoji.Width > 0 ? sizeEmoji.Width : 0) + sizeText.Width;
-        var bubbleW = Math.Min(Math.Max(totalContentWidth + closeBtnWidth + 24, 120), Width - 14);
+        var bubbleW = Math.Min(Math.Max(sizeText.Width + iconWidth + closeBtnWidth + 24, 120), Width - 14);
         var bubbleH = Math.Max(sizeText.Height + 12, 28f);
         var bx = (Width - bubbleW) / 2;
         var by = 4f;
 
-        // 2. 深色半透明玻璃拟态背景
+        // 3. 深色半透明玻璃拟态背景
         using var bgBrush = new SolidBrush(Color.FromArgb(240, 15, 23, 42)); // #0F172A 深海军蓝
         using var borderPen = new Pen(Color.FromArgb(99, 102, 241), 1.6f);   // #6366F1 紫蓝微光边框
 
@@ -716,7 +791,7 @@ public class DesktopPetForm : Form
         g.FillRoundedRectangle(bgBrush, rect, 12);
         g.DrawRoundedRectangle(borderPen, rect, 12);
 
-        // 3. 气泡下方向下小箭头
+        // 4. 气泡下方向下小指示箭头
         var arrowPoints = new PointF[]
         {
             new(Width / 2 - 5, by + bubbleH - 1),
@@ -727,22 +802,18 @@ public class DesktopPetForm : Form
         g.DrawLine(borderPen, Width / 2 - 5, by + bubbleH - 1, Width / 2, by + bubbleH + 5);
         g.DrawLine(borderPen, Width / 2 + 5, by + bubbleH - 1, Width / 2, by + bubbleH + 5);
 
-        // 4. 绘制图标 (采用 Segoe UI Emoji 专属字体，彻底根除 ▯ 乱码方框)
-        float curX = bx + 9;
+        // 5. 纯 GDI+ 矢量图标绘制（0% 乱码率）
+        var iconRect = new RectangleF(bx + 9, by + 5f, 16, 16);
+        DrawVectorIcon(g, iconType, iconRect);
+
+        // 6. 绘制多行文本（采用纯净中英文字体）
+        var textX = bx + 9 + iconWidth;
+        var textRect = new RectangleF(textX, by + 5f, bubbleW - (textX - bx) - closeBtnWidth - 4, bubbleH - 8);
         using var textBrush = new SolidBrush(Color.FromArgb(248, 250, 252));
-
-        if (!string.IsNullOrEmpty(icon))
-        {
-            g.DrawString(icon, fontEmoji, textBrush, curX, by + 5f);
-            curX += sizeEmoji.Width - 4;
-        }
-
-        // 5. 绘制多行文本（支持换行，完整呈现全部信息）
-        var textRect = new RectangleF(curX, by + 5f, bubbleW - (curX - bx) - closeBtnWidth - 4, bubbleH - 8);
         using var sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
-        g.DrawString(message, fontText, textBrush, textRect, sf);
+        g.DrawString(cleanMessage, fontText, textBrush, textRect, sf);
 
-        // 6. ✕ 关闭按钮
+        // 7. ✕ 关闭按钮
         var closeX = bx + bubbleW - 17;
         var closeY = by + 6f;
         _bubbleCloseRect = new RectangleF(closeX - 4, by + 2, 20, 24);
@@ -755,6 +826,82 @@ public class DesktopPetForm : Form
     }
 
     /// <summary>
+    /// 绘制 100% 原生 GDI+ 纯矢量图标（绝不出现 ▯ 乱码）
+    /// </summary>
+    private void DrawVectorIcon(Graphics g, string type, RectangleF r)
+    {
+        switch (type)
+        {
+            case "warning":
+                // ⚠️ 警告黄红三角 + 感叹号
+                using (var warnBrush = new SolidBrush(Color.FromArgb(245, 158, 11)))
+                using (var warnPen = new Pen(Color.FromArgb(239, 68, 68), 1.2f))
+                {
+                    var pts = new PointF[] {
+                        new(r.X + r.Width / 2, r.Y + 1),
+                        new(r.X + 1, r.Y + r.Height - 1),
+                        new(r.X + r.Width - 1, r.Y + r.Height - 1)
+                    };
+                    g.FillPolygon(warnBrush, pts);
+                    g.DrawPolygon(warnPen, pts);
+                    using var exPen = new Pen(Color.White, 1.8f);
+                    g.DrawLine(exPen, r.X + r.Width / 2, r.Y + 5, r.X + r.Width / 2, r.Y + 9);
+                    g.FillEllipse(Brushes.White, r.X + r.Width / 2 - 1f, r.Y + 11, 2f, 2f);
+                }
+                break;
+
+            case "thinking":
+                // ⚡ 能量黄金闪电
+                using (var boltBrush = new SolidBrush(Color.FromArgb(250, 204, 21)))
+                {
+                    var bolt = new PointF[] {
+                        new(r.X + 9, r.Y + 1),
+                        new(r.X + 4, r.Y + 8),
+                        new(r.X + 8, r.Y + 8),
+                        new(r.X + 7, r.Y + 15),
+                        new(r.X + 13, r.Y + 6),
+                        new(r.X + 9, r.Y + 6)
+                    };
+                    g.FillPolygon(boltBrush, bolt);
+                }
+                break;
+
+            case "tool":
+                // 🔍 霓虹蓝放大镜
+                using (var glassPen = new Pen(Color.FromArgb(56, 189, 248), 2f))
+                {
+                    g.DrawEllipse(glassPen, r.X + 2, r.Y + 2, 9, 9);
+                    g.DrawLine(glassPen, r.X + 9, r.Y + 9, r.X + 14, r.Y + 14);
+                }
+                break;
+
+            case "completed":
+                // 🍵 迷你茶杯/喝水杯
+                using (var mugBrush = new SolidBrush(Color.FromArgb(34, 197, 94)))
+                using (var mugPen = new Pen(Color.FromArgb(187, 247, 208), 1.2f))
+                {
+                    var mug = new RectangleF(r.X + 2, r.Y + 4, 11, 9);
+                    g.FillRoundedRectangle(mugBrush, mug, 2);
+                    g.DrawRoundedRectangle(mugPen, mug, 2);
+                    g.DrawArc(mugPen, r.X + 11, r.Y + 5, 4, 6, -80, 160);
+                }
+                break;
+
+            default:
+                // 💬 消息气泡星
+                using (var chatBrush = new SolidBrush(Color.FromArgb(168, 85, 247)))
+                {
+                    var chat = new RectangleF(r.X + 2, r.Y + 3, 12, 10);
+                    g.FillRoundedRectangle(chatBrush, chat, 3);
+                    g.FillPolygon(chatBrush, new PointF[] {
+                        new(r.X + 4, r.Y + 12), new(r.X + 8, r.Y + 12), new(r.X + 3, r.Y + 15)
+                    });
+                }
+                break;
+        }
+    }
+
+    /// <summary>
     /// 绘制底部发光渐变状态徽章 (⚡ 02:10 (第 4 步))
     /// </summary>
     private void DrawTimerBadge(Graphics g, int totalSeconds, int turnCount, bool isToolUse, float badgeY)
@@ -764,15 +911,13 @@ public class DesktopPetForm : Form
             : $"{totalSeconds}s";
 
         var turnText = turnCount > 1 ? $" (第 {turnCount} 步)" : "";
-        var icon = isToolUse ? "🔍" : "⚡";
         var text = $" {timeText}{turnText}";
 
-        using var fontEmoji = new Font("Segoe UI Emoji", 8f);
         using var fontMono = new Font("Consolas", 8.8f, FontStyle.Bold);
 
-        var sizeIcon = g.MeasureString(icon, fontEmoji);
         var sizeText = g.MeasureString(text, fontMono);
-        var badgeW = sizeIcon.Width + sizeText.Width + 10;
+        var iconW = 14f;
+        var badgeW = iconW + sizeText.Width + 12;
         var badgeH = 20f;
         var bx = (Width - badgeW) / 2;
 
@@ -788,10 +933,13 @@ public class DesktopPetForm : Form
         g.FillRoundedRectangle(gradBrush, rect, 10);
         g.DrawRoundedRectangle(borderPen, rect, 10);
 
-        // 绘制图标与时间文本
+        // 绘制矢量小图标
+        var iconRect = new RectangleF(bx + 6, badgeY + 3f, 12, 13);
+        DrawVectorIcon(g, isToolUse ? "tool" : "thinking", iconRect);
+
+        // 绘制时间文本
         using var textBrush = new SolidBrush(Color.White);
-        g.DrawString(icon, fontEmoji, textBrush, bx + 6, badgeY + 2f);
-        g.DrawString(text, fontMono, textBrush, bx + 6 + sizeIcon.Width - 4, badgeY + 2f);
+        g.DrawString(text, fontMono, textBrush, bx + 6 + iconW - 2, badgeY + 2f);
     }
 }
 
