@@ -90,82 +90,111 @@
         <span class="confetti c4">🎊</span>
       </div>
 
-      <!-- 1. 经典 Bongo Cat 敲键盘猫 (默认经典皮肤) -->
+      <!-- 1. 经典 Bongo Cat 敲键盘猫 (100% 原版经典 Meme 还原) -->
       <div v-if="settings.petAvatar === 'cat'" class="avatar-svg-box bongo-avatar">
-        <svg viewBox="0 0 120 100" width="96" height="84" class="bongo-svg">
-          <!-- 身体底色与轮廓 -->
-          <ellipse cx="60" cy="50" rx="42" ry="34" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
-          <!-- 猫耳朵 -->
-          <polygon points="30,30 20,8 48,20" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-ear ear-l" />
-          <polygon points="90,30 100,8 72,20" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-ear ear-r" />
-          <polygon points="32,26 25,14 44,20" fill="#fecdd3" />
-          <polygon points="88,26 95,14 76,20" fill="#fecdd3" />
-          
-          <!-- 腮红 -->
-          <ellipse cx="32" cy="52" rx="7" ry="4" fill="#fda4af" />
-          <ellipse cx="88" cy="52" rx="7" ry="4" fill="#fda4af" />
-          
-          <!-- 眼睛 -->
+        <svg viewBox="0 0 140 100" width="112" height="84" class="bongo-svg">
+          <!-- 1. 连体棉花糖猫咪轮廓 -->
+          <path 
+            d="M 18,62 L 20,38 C 16,28 20,18 28,12 L 36,-2 L 56,12 C 68,8 76,8 88,12 L 108,-2 L 116,12 C 124,18 126,28 126,38 L 128,62 Z" 
+            fill="#ffffff" 
+            stroke="#1e293b" 
+            stroke-width="2.4" 
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+
+          <!-- 2. 两颊小胡须 -->
+          <line x1="12" y1="28" x2="22" y2="30" stroke="#1e293b" stroke-width="1.6" stroke-linecap="round" />
+          <line x1="10" y1="35" x2="21" y2="35" stroke="#1e293b" stroke-width="1.6" stroke-linecap="round" />
+          <line x1="124" y1="30" x2="134" y2="28" stroke="#1e293b" stroke-width="1.6" stroke-linecap="round" />
+          <line x1="125" y1="35" x2="136" y2="35" stroke="#1e293b" stroke-width="1.6" stroke-linecap="round" />
+
+          <!-- 3. 面部表情 -->
           <g v-if="taskStatus.state === 'completed'">
             <!-- 喝水满足笑弯眼 ^ ^ -->
-            <path d="M38 42 Q46 32 54 42" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" />
-            <path d="M66 42 Q74 32 82 42" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" />
+            <path d="M46 28 Q54 20 62 28" stroke="#1e293b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+            <path d="M84 28 Q92 20 100 28" stroke="#1e293b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+            <!-- 嘴巴 :3 -->
+            <path d="M66 33 Q70 37 73 34 Q76 37 80 33" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round" />
           </g>
           <g v-else-if="taskStatus.state === 'idle'">
             <!-- 趴着打盹休息闭眼 ( - ‿ - ) -->
-            <path d="M38 43 Q46 36 54 43" stroke="#1e293b" stroke-width="2.6" fill="none" stroke-linecap="round" />
-            <path d="M66 43 Q74 36 82 43" stroke="#1e293b" stroke-width="2.6" fill="none" stroke-linecap="round" />
+            <path d="M46 30 Q54 24 62 30" stroke="#1e293b" stroke-width="2.4" fill="none" stroke-linecap="round" />
+            <path d="M84 30 Q92 24 100 30" stroke="#1e293b" stroke-width="2.4" fill="none" stroke-linecap="round" />
+            <!-- 嘴巴 :3 -->
+            <path d="M66 33 Q70 37 73 34 Q76 37 80 33" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round" />
           </g>
           <g v-else>
-            <!-- 思考/工作态水灵豆豆眼 -->
-            <circle cx="46" cy="42" r="5" fill="#1e293b" />
-            <circle cx="74" cy="42" r="5" fill="#1e293b" />
-            <circle cx="48" cy="40" r="1.8" fill="#ffffff" />
-            <circle cx="76" cy="40" r="1.8" fill="#ffffff" />
+            <!-- 经典原版纯黑豆豆眼 • • -->
+            <circle cx="53" cy="29" r="4.2" fill="#1e293b" />
+            <circle cx="93" cy="29" r="4.2" fill="#1e293b" />
+            <!-- 经典可爱 :3 嘴巴 -->
+            <path d="M66 33 Q70 37 73 34 Q76 37 80 33" stroke="#1e293b" stroke-width="2.2" fill="none" stroke-linecap="round" />
           </g>
-          
-          <!-- 嘴巴与小粉鼻 -->
-          <polygon points="57,48 63,48 60,52" fill="#fda4af" />
-          <path v-if="taskStatus.state !== 'completed'" d="M52 50 Q60 56 60 50 Q60 56 68 50" stroke="#1e293b" stroke-width="2.2" fill="none" stroke-linecap="round" />
-          
-          <!-- 木质小桌面与键盘 -->
-          <rect x="10" y="68" width="100" height="22" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" />
-          <rect x="30" y="72" width="60" height="14" rx="3" fill="#1e293b" />
-          <rect x="36" y="75" width="8" height="8" rx="1" fill="#38bdf8" />
-          <rect x="48" y="75" width="8" height="8" rx="1" fill="#a855f7" />
-          <rect x="60" y="75" width="8" height="8" rx="1" fill="#ec4899" />
-          <rect x="72" y="75" width="8" height="8" rx="1" fill="#22c55e" />
-          
-          <!-- 核心动作分流 -->
-          <!-- 🍵 1. 完成态：端起小茶杯喝水冒热气 -->
+
+          <!-- 4. 原版透视键盘与鼠标 -->
+          <g class="authentic-desk-group">
+            <!-- 键盘主体 (微透视角度) -->
+            <polygon points="22,60 98,60 104,84 16,84" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <line x1="16" y1="84" x2="16" y2="87" stroke="#1e293b" stroke-width="2" />
+            <line x1="104" y1="84" x2="104" y2="87" stroke="#1e293b" stroke-width="2" />
+            <line x1="16" y1="87" x2="104" y2="87" stroke="#1e293b" stroke-width="2" />
+            <!-- 键盘按键网格线 -->
+            <line x1="20" y1="67" x2="100" y2="67" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="18" y1="75" x2="102" y2="75" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="32" y1="60" x2="28" y2="84" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="48" y1="60" x2="44" y2="84" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="64" y1="60" x2="60" y2="84" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="80" y1="60" x2="76" y2="84" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="94" y1="60" x2="90" y2="84" stroke="#94a3b8" stroke-width="1.2" />
+            <!-- 右侧小鼠标 -->
+            <ellipse cx="118" cy="74" rx="9" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="1.8" />
+            <line x1="118" y1="63" x2="118" y2="73" stroke="#94a3b8" stroke-width="1.2" />
+            <line x1="110" y1="71" x2="126" y2="71" stroke="#94a3b8" stroke-width="1.2" />
+          </g>
+
+          <!-- 5. 核心动作分流 -->
+          <!-- 🍵 完成态：双手捧热茶杯 + 漂浮爱心 ❤️ -->
           <g v-if="taskStatus.state === 'completed'" class="drinking-tea-group">
-            <!-- 蒸汽上升动画 -->
-            <path d="M54 48 Q50 42 56 36 Q52 30 56 24" stroke="rgba(255,255,255,0.7)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-1" />
-            <path d="M66 48 Q70 42 64 36 Q68 30 64 24" stroke="rgba(255,255,255,0.7)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-2" />
-            <!-- 水杯主体与把手 -->
-            <rect x="48" y="50" width="24" height="20" rx="4" fill="#38bdf8" stroke="#1e293b" stroke-width="2" />
-            <path d="M72 54 Q80 54 80 62 Q80 70 72 70" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round" />
-            <ellipse cx="60" cy="50" rx="12" ry="3" fill="#e0f2fe" stroke="#1e293b" stroke-width="1.5" />
-            <!-- 双手捧杯爪爪 -->
-            <ellipse cx="44" cy="62" rx="7" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
-            <ellipse cx="76" cy="62" rx="7" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <!-- 蒸汽上升波浪 -->
+            <path d="M64 42 Q60 36 66 30 Q62 24 66 18" stroke="rgba(255,255,255,0.75)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-1" />
+            <path d="M76 42 Q80 36 74 30 Q78 24 74 18" stroke="rgba(255,255,255,0.75)" stroke-width="1.8" fill="none" stroke-linecap="round" class="steam-wave-2" />
+            <!-- 马克杯 -->
+            <rect x="58" y="44" width="24" height="20" rx="4" fill="#38bdf8" stroke="#1e293b" stroke-width="2" />
+            <path d="M82 48 Q90 48 90 56 Q90 64 82 64" stroke="#1e293b" stroke-width="2" fill="none" stroke-linecap="round" />
+            <!-- 双爪抱杯 -->
+            <ellipse cx="52" cy="56" rx="8" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <ellipse cx="88" cy="56" rx="8" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+            <!-- 浮动爱心 -->
+            <path d="M 116,14 C 112,8 106,12 110,18 L 116,24 L 122,18 C 126,12 120,8 116,14 Z" fill="#f43f5e" class="bongo-heart" />
           </g>
-          <!-- ⚡ 2. 敲键盘状态 (极速交替拍打) -->
-          <g v-else-if="taskStatus.state === 'thinking'" class="bongo-typing-paws">
-            <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-paw-l" />
-            <ellipse cx="84" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" class="bongo-paw-r" />
+          <!-- ⚡ 思考态：招牌 Bongo 极速交替拍打 (下按肉爪 ↔ 抬爪露出粉嫩肉垫 🐾) -->
+          <g v-else-if="taskStatus.state === 'thinking'" class="bongo-authentic-paws">
+            <!-- 左爪下按，右爪抬起露出粉嫩肉垫 -->
+            <g class="paw-group-l">
+              <ellipse cx="36" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            </g>
+            <g class="paw-group-r">
+              <ellipse cx="102" cy="40" rx="11" ry="12" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+              <!-- 肉垫大肉心 -->
+              <ellipse cx="102" cy="44" rx="5.5" ry="4.5" fill="#f472b6" />
+              <!-- 3颗小肉垫豆豆 -->
+              <circle cx="97" cy="37" r="2.2" fill="#f472b6" />
+              <circle cx="102" cy="35" r="2.4" fill="#f472b6" />
+              <circle cx="107" cy="37" r="2.2" fill="#f472b6" />
+            </g>
           </g>
-          <!-- 🔍 3. 工具态 (举放大镜) -->
+          <!-- 🔍 工具态 (举放大镜) -->
           <g v-else-if="taskStatus.state === 'tool_use'">
-            <ellipse cx="36" cy="74" rx="10" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
-            <ellipse cx="88" cy="46" rx="10" ry="9" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
-            <circle cx="95" cy="35" r="7" stroke="#6366f1" stroke-width="2.5" fill="none" />
-            <line x1="100" y1="40" x2="106" y2="46" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" />
+            <ellipse cx="36" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <ellipse cx="98" cy="46" rx="11" ry="9" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <circle cx="105" cy="34" r="7" stroke="#6366f1" stroke-width="2.5" fill="none" />
+            <line x1="110" y1="39" x2="116" y2="45" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" />
           </g>
-          <!-- 🐾 4. 默认空闲态 (趴在桌面上软萌打盹) -->
-          <g v-else class="idle-sleeping-paws">
-            <ellipse cx="34" cy="76" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
-            <ellipse cx="86" cy="76" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.6" />
+          <!-- 🐾 默认空闲态 (趴在桌面上软萌打盹) -->
+          <g v-else class="idle-authentic-paws">
+            <ellipse cx="38" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
+            <ellipse cx="86" cy="68" rx="11" ry="8" fill="#ffffff" stroke="#1e293b" stroke-width="2.2" />
           </g>
         </svg>
       </div>

@@ -8,13 +8,14 @@ using ModelFailoverGateway.Models;
 namespace ModelFailoverGateway.Services;
 
 /// <summary>
-/// Windows 原生置顶·贴边吸附隐藏·经典 Bongo Cat 灵动桌面宠物
-/// 状态驱动形态：
-/// 1. 空闲态 (Idle): 趴在桌面上软萌打盹休息的猫咪 (微弱呼吸起伏)
-/// 2. 思考态 (Thinking): 招牌飞速交替敲键盘的 Bongo Cat
-/// 3. 工具态 (Tool Use): 专注举起放大镜探查的猫咪
-/// 4. 完成态 (Completed): 端起冒着热气的小茶杯开心喝水喝茶的猫咪 🍵
-/// 气泡与图标采用 100% 矢量图标渲染，彻底杜绝 Unicode 字体缺字方框乱码 ▯
+/// Windows 原生置顶·贴边吸附隐藏·100% 原版经典 Bongo Cat 灵动桌面宠物
+/// 真实还原原版经典 Meme：
+/// 1. 软萌棉花糖连体猫咪轮廓 + 尖尖猫耳 + 俏皮小胡须
+/// 2. 极简原版脸部：两颗纯黑豆豆眼 + 经典 :3 / ω 萌萌嘴
+/// 3. 透视角度机械键盘 + 滚轮小鼠标
+/// 4. 招牌拍打动效：下按肉爪 ↔ 抬爪露出粉嫩肉垫 (1大3小 🐾)
+/// 5. 完成态：端起冒热气的陶瓷小杯喝水喝茶，漂浮爱心 ❤️
+/// 6. 空闲态：软萌趴在桌面上闭眼打盹 ( ˘ω˘ )
 /// </summary>
 public class DesktopPetForm : Form
 {
@@ -40,7 +41,7 @@ public class DesktopPetForm : Form
     private string _prevState = "idle";
 
     // 气泡对话框 (支持高颜值玻璃拟态、多行自适应卡片与纯矢量图标)
-    private string _bubbleText = "今天也要元气满满写代码哦！";
+    private string _bubbleText = "今天也要元气满满写代码哦！✨";
     private int _bubbleFadeTicks = 180; // 约 6 秒
     private RectangleF _bubbleCloseRect = RectangleF.Empty;
     private float _renderedBubbleBottom = 0;
@@ -80,7 +81,7 @@ public class DesktopPetForm : Form
         _alertService = alertService;
         _trayManager = trayManager;
 
-        // 窗体基础属性 (250x220 保证多行气泡与底部徽章完整展示且紧凑)
+        // 窗体基础属性 (250x220 确保多行气泡与底部徽章完整展示且紧凑)
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
@@ -114,9 +115,9 @@ public class DesktopPetForm : Form
     private void InitContextMenu()
     {
         var menu = new ContextMenuStrip();
-        var bongoItem = new ToolStripMenuItem("🐱 切换为 Bongo Cat 敲鼓猫", null, (s, e) => { _avatar = "bongo"; ShowBubble("经典 Bongo 敲键盘猫就位！"); });
-        var cyberItem = new ToolStripMenuItem("🤖 切换为赛博机甲猫", null, (s, e) => { _avatar = "cyber"; ShowBubble("赛博机甲已连接！"); });
-        var dogItem = new ToolStripMenuItem("🐶 切换为忠诚柴犬", null, (s, e) => { _avatar = "dog"; ShowBubble("汪汪！柴犬为您护航~"); });
+        var bongoItem = new ToolStripMenuItem("🐱 切换为原版经典 Bongo Cat", null, (s, e) => { _avatar = "bongo"; ShowBubble("经典 Bongo 敲键盘猫就位！🐾"); });
+        var cyberItem = new ToolStripMenuItem("🤖 切换为赛博机甲猫", null, (s, e) => { _avatar = "cyber"; ShowBubble("赛博机甲已连接！⚡"); });
+        var dogItem = new ToolStripMenuItem("🐶 切换为忠诚柴犬", null, (s, e) => { _avatar = "dog"; ShowBubble("汪汪！柴犬为您护航~ ✨"); });
 
         var soundItem = new ToolStripMenuItem("🔊 提示音开关", null, (s, e) => {
             _trayManager.IsSoundEnabled = !_trayManager.IsSoundEnabled;
@@ -416,7 +417,7 @@ public class DesktopPetForm : Form
 
             // 2. 猫咪主体垂直紧随气泡底部，消除多余空白
             var catY = (int)Math.Max(_renderedBubbleBottom, 12);
-            var petRect = new Rectangle((Width - 120) / 2, catY, 120, 96);
+            var petRect = new Rectangle((Width - 140) / 2, catY, 140, 96);
 
             if (_avatar == "bongo")
             {
@@ -435,7 +436,7 @@ public class DesktopPetForm : Form
             if (isThinking || isToolUse)
             {
                 var totalElapsedSec = (int)(DateTime.Now - (status.SessionStartTime != DateTime.MinValue ? status.SessionStartTime : status.Timestamp)).TotalSeconds;
-                var badgeY = petRect.Y + 68 + 18; // 键盘底边直接吸附
+                var badgeY = petRect.Y + 56 + 28; // 透视键盘底边直接吸附
                 DrawTimerBadge(g, totalElapsedSec, status.TurnCount, isToolUse, badgeY);
             }
         }
@@ -443,221 +444,285 @@ public class DesktopPetForm : Form
     }
 
     /// <summary>
-    /// 经典 Bongo Cat 完整绘制：
-    /// - 空闲时：趴在桌面上软萌打盹 (眼睛温和微闭，微弱呼吸呼吸起伏)
-    /// - 思考时：飞速敲击键盘打字
-    /// - 工具时：右手举放大镜探查
-    /// - 完成时：端起冒着热气的小茶杯开心喝水喝茶 🍵
+    /// 100% 还原原版经典 Bongo Cat：
+    /// - 软萌连体棉花糖猫咪轮廓（尖尖猫耳、圆润软颊、俏皮胡须）
+    /// - 极简原版脸部：两颗纯黑豆豆眼 + 经典 :3 / ω 萌萌嘴
+    /// - 键盘与鼠标：透视角度机械键盘 + 滚轮鼠标
+    /// - 经典抬爪肉垫：抬起的小爪子露出可爱的粉嫩肉垫 (1大3小 🐾)
+    /// - 喝茶/喝水态：捧着冒热气的小杯子喝水，周围漂浮爱心 ❤️
+    /// - 空闲态：软萌趴在桌面上闭眼打盹 ( ˘ω˘ )
     /// </summary>
     private void DrawBongoCat(Graphics g, Rectangle r, bool isThinking, bool isToolUse, bool isCompleted)
     {
-        var earTwitch = (float)Math.Sin(_tickCount * 0.12) * 2.2f;
-
-        // 空闲打盹时微弱呼吸浮动，思考/喝水时正常体态
         var isIdle = !isThinking && !isToolUse && !isCompleted;
         var breathingOffset = isIdle ? (float)Math.Sin(_tickCount * 0.08) * 1.5f : 0f;
         var cy = isIdle ? r.Y + 6 + breathingOffset : r.Y;
 
-        using var blackPen = new Pen(Color.FromArgb(30, 41, 59), 2.6f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
-        using var whiteBrush = new SolidBrush(Color.FromArgb(255, 255, 255));
-        using var pinkBrush = new SolidBrush(Color.FromArgb(253, 164, 175)); // #FDA4AF 腮红粉
-        using var innerEarBrush = new SolidBrush(Color.FromArgb(254, 205, 211)); // 软耳粉
+        using var blackPen = new Pen(Color.FromArgb(30, 41, 59), 2.4f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
+        using var thinPen = new Pen(Color.FromArgb(30, 41, 59), 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        using var whiteBrush = new SolidBrush(Color.White);
+        using var pinkBrush = new SolidBrush(Color.FromArgb(244, 114, 182)); // 粉嫩肉垫色 #F472B6
 
-        // 1. 身体与头部轮廓（纯白圆润底座）
-        var headRect = new RectangleF(r.X + 18, cy + 8, 84, 70);
-        g.FillEllipse(whiteBrush, headRect);
+        var deskY = r.Y + 56;
 
-        // 2. 猫耳朵（带小内耳与晃动）
-        var leftEar = new PointF[] { new(r.X + 22, cy + 24), new(r.X + 14, cy - 4 + earTwitch), new(r.X + 44, cy + 12) };
-        var rightEar = new PointF[] { new(r.X + 76, cy + 12), new(r.X + 106, cy - 4 - earTwitch), new(r.X + 98, cy + 24) };
-        g.FillPolygon(whiteBrush, leftEar);
-        g.FillPolygon(whiteBrush, rightEar);
-        g.DrawPolygon(blackPen, leftEar);
-        g.DrawPolygon(blackPen, rightEar);
+        // 1. 绘制原版经典连体猫咪轮廓 (一气呵成的棉花糖猫头与身体)
+        var catPath = new GraphicsPath();
+        catPath.StartFigure();
+        // 从左下身体开始
+        catPath.AddLine(r.X + 16, deskY + 6, r.X + 18, cy + 28);
+        // 左脸颊微鼓
+        catPath.AddBezier(
+            new PointF(r.X + 18, cy + 28),
+            new PointF(r.X + 14, cy + 18),
+            new PointF(r.X + 18, cy + 8),
+            new PointF(r.X + 26, cy + 2));
+        // 左尖耳朵
+        catPath.AddLine(r.X + 26, cy + 2, r.X + 34, cy - 14); // 耳尖
+        catPath.AddLine(r.X + 34, cy - 14, r.X + 54, cy + 2); // 耳内
+        // 头顶微弧线
+        catPath.AddBezier(
+            new PointF(r.X + 54, cy + 2),
+            new PointF(r.X + 66, cy - 2),
+            new PointF(r.X + 74, cy - 2),
+            new PointF(r.X + 86, cy + 2));
+        // 右尖耳朵
+        catPath.AddLine(r.X + 86, cy + 2, r.X + 106, cy - 14); // 耳尖
+        catPath.AddLine(r.X + 106, cy - 14, r.X + 114, cy + 2); // 耳外
+        // 右脸颊微鼓
+        catPath.AddBezier(
+            new PointF(r.X + 114, cy + 2),
+            new PointF(r.X + 122, cy + 18),
+            new PointF(r.X + 122, cy + 28),
+            new PointF(r.X + 124, deskY + 6));
+        // 底部闭合
+        catPath.CloseFigure();
 
-        // 内耳粉色三角形
-        var innerLeftEar = new PointF[] { new(r.X + 24, cy + 20), new(r.X + 18, cy + 1 + earTwitch), new(r.X + 38, cy + 13) };
-        var innerRightEar = new PointF[] { new(r.X + 82, cy + 13), new(r.X + 102, cy + 1 - earTwitch), new(r.X + 96, cy + 20) };
-        g.FillPolygon(innerEarBrush, innerLeftEar);
-        g.FillPolygon(innerEarBrush, innerRightEar);
+        // 填充纯白与黑线描边
+        g.FillPath(whiteBrush, catPath);
+        g.DrawPath(blackPen, catPath);
 
-        // 头部主轮廓描边
-        g.DrawArc(blackPen, headRect.X, headRect.Y, headRect.Width, headRect.Height, 20, 320);
+        // 2. 原版胡须 (左右各两道俏皮细线)
+        g.DrawLine(thinPen, r.X + 10, cy + 18, r.X + 20, cy + 20);
+        g.DrawLine(thinPen, r.X + 8, cy + 25, r.X + 19, cy + 25);
+        g.DrawLine(thinPen, r.X + 120, cy + 20, r.X + 130, cy + 18);
+        g.DrawLine(thinPen, r.X + 121, cy + 25, r.X + 132, cy + 25);
 
-        // 3. 腮红
-        g.FillEllipse(pinkBrush, r.X + 24, cy + 42, 14, 8);
-        g.FillEllipse(pinkBrush, r.X + 82, cy + 42, 14, 8);
-
-        // 4. 眼睛（空闲打盹 / 喝水满足 / 思考专注）
+        // 3. 原版经典面部表情
         if (isIdle)
         {
-            // 趴着休息时：甜甜的闭眼睡眠弯线 ( - ‿ - )
-            using var sleepPen = new Pen(Color.FromArgb(30, 41, 59), 2.5f);
-            g.DrawArc(sleepPen, r.X + 36, cy + 34, 13, 8, 190, 160);
-            g.DrawArc(sleepPen, r.X + 71, cy + 34, 13, 8, 190, 160);
+            // 趴着休息睡眠眼 ( - ‿ - )
+            g.DrawArc(blackPen, r.X + 44, cy + 18, 14, 8, 190, 160);
+            g.DrawArc(blackPen, r.X + 82, cy + 18, 14, 8, 190, 160);
+            // 嘴巴 :3
+            g.DrawArc(blackPen, r.X + 63, cy + 23, 7, 6, 20, 150);
+            g.DrawArc(blackPen, r.X + 70, cy + 23, 7, 6, 10, 150);
         }
         else if (isCompleted)
         {
-            // 喝茶满足时：开心的笑眼弯弯 ^ ^
-            using var happyPen = new Pen(Color.FromArgb(30, 41, 59), 3f);
-            g.DrawArc(happyPen, r.X + 34, cy + 28, 15, 11, 200, 140);
-            g.DrawArc(happyPen, r.X + 71, cy + 28, 15, 11, 200, 140);
+            // 喝水满足笑弯眼 ^ ^
+            using var happyPen = new Pen(Color.FromArgb(30, 41, 59), 2.6f);
+            g.DrawArc(happyPen, r.X + 44, cy + 16, 14, 10, 200, 140);
+            g.DrawArc(happyPen, r.X + 82, cy + 16, 14, 10, 200, 140);
+            // 嘴巴微张
+            g.DrawArc(blackPen, r.X + 63, cy + 22, 7, 6, 20, 150);
+            g.DrawArc(blackPen, r.X + 70, cy + 22, 7, 6, 10, 150);
         }
         else if (_isBlinking)
         {
-            // 眨眼闭眼线
-            g.DrawArc(blackPen, r.X + 36, cy + 32, 12, 8, 190, 160);
-            g.DrawArc(blackPen, r.X + 72, cy + 32, 12, 8, 190, 160);
+            // 眨眼
+            g.DrawLine(blackPen, r.X + 46, cy + 24, r.X + 58, cy + 24);
+            g.DrawLine(blackPen, r.X + 82, cy + 24, r.X + 94, cy + 24);
+            // 嘴巴 :3
+            g.DrawArc(blackPen, r.X + 63, cy + 23, 7, 6, 20, 150);
+            g.DrawArc(blackPen, r.X + 70, cy + 23, 7, 6, 10, 150);
         }
         else
         {
-            // 思考/工作态：水灵灵的黑曜石大豆豆眼
-            g.FillEllipse(Brushes.Black, r.X + 37, cy + 28, 11, 13);
-            g.FillEllipse(Brushes.Black, r.X + 72, cy + 28, 11, 13);
-            // 眼睛高光小白点
-            g.FillEllipse(Brushes.White, r.X + 39, cy + 30, 4, 4);
-            g.FillEllipse(Brushes.White, r.X + 74, cy + 30, 4, 4);
+            // 经典两颗黑豆豆眼 • •
+            g.FillEllipse(Brushes.Black, r.X + 48, cy + 20, 7, 8);
+            g.FillEllipse(Brushes.Black, r.X + 85, cy + 20, 7, 8);
+            // 经典可爱 :3 / ω 猫咪嘴巴
+            g.DrawArc(blackPen, r.X + 63, cy + 23, 7, 6, 20, 150);
+            g.DrawArc(blackPen, r.X + 70, cy + 23, 7, 6, 10, 150);
         }
 
-        // 5. 鼻子与嘴巴 (ω 形状)
-        g.FillPolygon(pinkBrush, new PointF[] { new(r.X + 57, cy + 40), new(r.X + 63, cy + 40), new(r.X + 60, cy + 44) });
-        if (!isCompleted)
-        {
-            g.DrawArc(blackPen, r.X + 51, cy + 42, 9, 8, 20, 150);
-            g.DrawArc(blackPen, r.X + 60, cy + 42, 9, 8, 10, 150);
-        }
+        // 4. 绘制透视键盘与鼠标 (原版桌面透视感)
+        DrawAuthenticKeyboardAndMouse(g, r.X + 10, deskY, blackPen, thinPen, whiteBrush);
 
-        // 6. 木质小桌面与键盘 (桌面固定在下方)
-        var deskY = r.Y + 68;
-        using var deskBrush = new SolidBrush(Color.FromArgb(241, 245, 249));
-        using var deskBorderPen = new Pen(Color.FromArgb(148, 163, 184), 2f);
-        g.FillRoundedRectangle(deskBrush, r.X + 6, deskY, 108, 24, 6);
-        g.DrawRoundedRectangle(deskBorderPen, r.X + 6, deskY, 108, 24, 6);
-
-        // 迷你赛博键盘
-        using var kbBrush = new SolidBrush(Color.FromArgb(30, 41, 59));
-        g.FillRoundedRectangle(kbBrush, r.X + 26, deskY + 4, 68, 16, 4);
-        var keyColors = new[] { Color.FromArgb(56, 189, 248), Color.FromArgb(168, 85, 247), Color.FromArgb(236, 72, 153), Color.FromArgb(34, 197, 94) };
-        for (int i = 0; i < 4; i++)
-        {
-            using var kBrush = new SolidBrush(keyColors[i % keyColors.Length]);
-            g.FillRectangle(kBrush, r.X + 32 + i * 15, deskY + 7, 10, 8);
-        }
-
-        // 7. 核心动作分流：
+        // 5. 绘制招牌 Bongo 爪爪与动作
         if (isCompleted)
         {
-            // 🍵【完成态】：端起冒着热气的小茶杯开心喝水喝茶
-            DrawDrinkingTeaCat(g, r, cy, deskY);
+            // 🍵【完成态】：双手捧着冒热气的马克杯喝水 + 漂浮爱心 ❤️
+            DrawAuthenticDrinkingCat(g, r.X, cy, deskY, blackPen, thinPen, whiteBrush);
         }
         else if (isToolUse)
         {
-            // 🔍【工具态】：左手按桌，右手举放大镜
-            g.FillEllipse(whiteBrush, r.X + 18, deskY - 4, 20, 16);
-            g.DrawEllipse(blackPen, r.X + 18, deskY - 4, 20, 16);
+            // 🔍【工具态】：左爪搭键盘，右爪举放大镜
+            DrawMittenPaw(g, r.X + 32, deskY + 6, blackPen, whiteBrush);
 
-            var glassX = r.X + 86;
-            var glassY = cy + 18;
-            g.FillEllipse(whiteBrush, glassX - 4, glassY + 12, 18, 16);
-            g.DrawEllipse(blackPen, glassX - 4, glassY + 12, 18, 16);
+            var glassX = r.X + 94;
+            var glassY = cy + 12;
+            DrawRaisedPawWithBeans(g, glassX, glassY + 12, blackPen, whiteBrush, pinkBrush);
 
-            using var glassPen = new Pen(Color.FromArgb(99, 102, 241), 2.5f);
-            g.DrawEllipse(glassPen, glassX, glassY, 14, 14);
-            g.DrawLine(glassPen, glassX + 11, glassY + 11, glassX + 18, glassY + 18);
+            using var glassPen = new Pen(Color.FromArgb(99, 102, 241), 2.4f);
+            g.DrawEllipse(glassPen, glassX - 4, glassY - 4, 15, 15);
+            g.DrawLine(glassPen, glassX + 7, glassY + 7, glassX + 14, glassY + 14);
         }
         else if (isThinking)
         {
-            // ⚡【思考态】：飞速交替敲击键盘
-            var beat = (_tickCount / 3) % 2;
-            var leftPawDown = beat == 0;
-            var rightPawDown = beat == 1;
-
-            var leftPawY = leftPawDown ? deskY + 1 : deskY - 10;
-            var rightPawY = rightPawDown ? deskY + 1 : deskY - 10;
-
-            g.FillEllipse(whiteBrush, r.X + 18, leftPawY, 20, 18);
-            g.DrawEllipse(blackPen, r.X + 18, leftPawY, 20, 18);
-
-            g.FillEllipse(whiteBrush, r.X + 82, rightPawY, 20, 18);
-            g.DrawEllipse(blackPen, r.X + 82, rightPawY, 20, 18);
-
-            var activeKeyX = leftPawDown ? r.X + 34 : r.X + 78;
-            using var sparkBrush = new SolidBrush(Color.Gold);
-            g.FillPolygon(sparkBrush, new PointF[] {
-                new(activeKeyX, deskY - 2), new(activeKeyX + 3, deskY - 6), new(activeKeyX + 6, deskY - 2), new(activeKeyX + 3, deskY + 2)
-            });
+            // ⚡【思考态】：招牌 Bongo 极速交替拍打！
+            // 一只手按键盘 (Mitten Paw)，另一只手抬起露出粉嫩肉垫 (Toe Beans Paw)！
+            var beat = (_tickCount / 3) % 2; // 0 或 1 节拍交替
+            if (beat == 0)
+            {
+                // 左爪下按，右爪抬起露出粉嫩肉垫 🐾
+                DrawMittenPaw(g, r.X + 30, deskY + 4, blackPen, whiteBrush);
+                DrawRaisedPawWithBeans(g, r.X + 96, cy + 16, blackPen, whiteBrush, pinkBrush);
+            }
+            else
+            {
+                // 左爪抬起露出粉嫩肉垫 🐾，右爪下按
+                DrawRaisedPawWithBeans(g, r.X + 22, cy + 16, blackPen, whiteBrush, pinkBrush);
+                DrawMittenPaw(g, r.X + 80, deskY + 4, blackPen, whiteBrush);
+            }
         }
         else
         {
-            // 🐾【空闲态】：趴在桌面上软萌打盹，双爪乖巧贴在桌面上
-            g.FillEllipse(whiteBrush, r.X + 26, deskY + 3, 22, 15);
-            g.DrawEllipse(blackPen, r.X + 26, deskY + 3, 22, 15);
-
-            g.FillEllipse(whiteBrush, r.X + 72, deskY + 3, 22, 15);
-            g.DrawEllipse(blackPen, r.X + 72, deskY + 3, 22, 15);
-
-            // 软萌 zZ 打盹小气泡
-            DrawSleepZz(g, r.X + 96, (int)cy - 6);
+            // 🐾【空闲态】：软萌趴在桌面上，两只小圆爪搭在键盘上方
+            DrawMittenPaw(g, r.X + 32, deskY + 6, blackPen, whiteBrush);
+            DrawMittenPaw(g, r.X + 78, deskY + 6, blackPen, whiteBrush);
+            DrawSleepZz(g, r.X + 112, (int)cy - 6);
         }
     }
 
     /// <summary>
-    /// 绘制端起小茶杯喝水喝茶的小猫 (带热气与双手捧杯)
+    /// 绘制原版透视键盘与鼠标
     /// </summary>
-    private void DrawDrinkingTeaCat(Graphics g, Rectangle r, float cy, int deskY)
+    private void DrawAuthenticKeyboardAndMouse(Graphics g, int x, int y, Pen blackPen, Pen thinPen, Brush whiteBrush)
     {
-        using var blackPen = new Pen(Color.FromArgb(30, 41, 59), 2.4f);
-        using var whiteBrush = new SolidBrush(Color.White);
-        using var cupBrush = new SolidBrush(Color.FromArgb(56, 189, 248)); // #38BDF8 天蓝陶瓷杯
-        using var cupRimBrush = new SolidBrush(Color.FromArgb(224, 242, 254)); // 奶白杯口
+        // 1. 透视键盘底座 (微倾斜俯视视角)
+        var kbPoints = new PointF[] {
+            new(x + 12, y + 4),
+            new(x + 88, y + 4),
+            new(x + 94, y + 28),
+            new(x + 6, y + 28)
+        };
+        g.FillPolygon(whiteBrush, kbPoints);
+        g.DrawPolygon(blackPen, kbPoints);
 
-        // 喝水动作微弱轻晃
-        var sipOffset = (float)Math.Sin(_tickCount * 0.2) * 1.8f;
-        var cupX = r.X + 46;
-        var cupY = cy + 40 + sipOffset;
+        // 键盘侧边厚度
+        g.DrawLine(blackPen, x + 6, y + 28, x + 6, y + 31);
+        g.DrawLine(blackPen, x + 94, y + 28, x + 94, y + 31);
+        g.DrawLine(blackPen, x + 6, y + 31, x + 94, y + 31);
 
-        // 1. 热腾腾的蒸汽曲线 ~ ~
+        // 2. 键盘上的透视键帽格子 (3排)
+        for (int row = 0; row < 3; row++)
+        {
+            var rowY = y + 8 + row * 6f;
+            var startX = x + 12 - row * 2f;
+            var endX = x + 88 + row * 2f;
+            g.DrawLine(thinPen, startX, rowY, endX, rowY);
+        }
+        for (int col = 0; col < 6; col++)
+        {
+            var tx = x + 24 + col * 11;
+            var bx = x + 20 + col * 12;
+            g.DrawLine(thinPen, tx, y + 5, bx, y + 27);
+        }
+
+        // 3. 右侧小鼠标
+        var mouseX = x + 104;
+        var mouseY = y + 8;
+        g.FillEllipse(whiteBrush, mouseX, mouseY, 16, 22);
+        g.DrawEllipse(blackPen, mouseX, mouseY, 16, 22);
+        g.DrawLine(thinPen, mouseX + 8, mouseY + 2, mouseX + 8, mouseY + 11); // 中缝
+        g.DrawLine(thinPen, mouseX + 3, mouseY + 8, mouseX + 13, mouseY + 8); // 左右键分隔
+    }
+
+    /// <summary>
+    /// 绘制下按在键盘上的小肉爪 (Mitten Paw)
+    /// </summary>
+    private void DrawMittenPaw(Graphics g, float x, float y, Pen blackPen, Brush whiteBrush)
+    {
+        g.FillEllipse(whiteBrush, x, y, 22, 16);
+        g.DrawEllipse(blackPen, x, y, 22, 16);
+    }
+
+    /// <summary>
+    /// 绘制抬起的小爪爪并展示粉嫩肉垫 (Toe Beans Paw 🐾)
+    /// </summary>
+    private void DrawRaisedPawWithBeans(Graphics g, float x, float y, Pen blackPen, Brush whiteBrush, Brush pinkBrush)
+    {
+        // 爪子轮廓 (圆润白底)
+        g.FillEllipse(whiteBrush, x, y, 22, 24);
+        g.DrawEllipse(blackPen, x, y, 22, 24);
+
+        // 中央大肉垫
+        g.FillEllipse(pinkBrush, x + 5.5f, y + 10, 11, 9);
+
+        // 上方 3 颗萌萌小肉垫豆豆
+        g.FillEllipse(pinkBrush, x + 3, y + 4, 4.5f, 4.5f);
+        g.FillEllipse(pinkBrush, x + 8.5f, y + 2, 5f, 5f);
+        g.FillEllipse(pinkBrush, x + 14.5f, y + 4, 4.5f, 4.5f);
+    }
+
+    /// <summary>
+    /// 绘制原版喝茶/喝水小猫与爱心
+    /// </summary>
+    private void DrawAuthenticDrinkingCat(Graphics g, int rx, float cy, int deskY, Pen blackPen, Pen thinPen, Brush whiteBrush)
+    {
+        using var cupBrush = new SolidBrush(Color.FromArgb(56, 189, 248)); // 天蓝陶瓷杯
+        using var pinkHeartBrush = new SolidBrush(Color.FromArgb(244, 114, 182)); // 粉红爱心
+
+        var sipOffset = (float)Math.Sin(_tickCount * 0.2) * 1.6f;
+        var cupX = rx + 56;
+        var cupY = cy + 34 + sipOffset;
+
+        // 1. 冒出热气的蒸汽波浪 ~ ~
         using var steamPen = new Pen(Color.FromArgb(180, 255, 255, 255), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         var s1 = (_tickCount * 0.12f) % 6.28f;
         var s2 = ((_tickCount + 30) * 0.12f) % 6.28f;
 
         g.DrawBezier(steamPen,
-            new PointF(cupX + 8, cupY - 2),
-            new PointF(cupX + 4 + (float)Math.Sin(s1) * 3, cupY - 10),
-            new PointF(cupX + 12 - (float)Math.Sin(s1) * 3, cupY - 16),
-            new PointF(cupX + 8, cupY - 22));
+            new PointF(cupX + 6, cupY - 2),
+            new PointF(cupX + 2 + (float)Math.Sin(s1) * 3, cupY - 9),
+            new PointF(cupX + 10 - (float)Math.Sin(s1) * 3, cupY - 15),
+            new PointF(cupX + 6, cupY - 20));
 
         g.DrawBezier(steamPen,
-            new PointF(cupX + 20, cupY - 2),
-            new PointF(cupX + 16 + (float)Math.Sin(s2) * 3, cupY - 10),
-            new PointF(cupX + 24 - (float)Math.Sin(s2) * 3, cupY - 16),
-            new PointF(cupX + 20, cupY - 22));
+            new PointF(cupX + 18, cupY - 2),
+            new PointF(cupX + 14 + (float)Math.Sin(s2) * 3, cupY - 9),
+            new PointF(cupX + 22 - (float)Math.Sin(s2) * 3, cupY - 15),
+            new PointF(cupX + 18, cupY - 20));
 
-        // 2. 小茶杯主体
-        var cupRect = new RectangleF(cupX, cupY, 28, 22);
-        g.FillRoundedRectangle(cupBrush, cupRect, 6);
-        g.DrawRoundedRectangle(blackPen, cupRect, 6);
+        // 2. 马克杯主体
+        var cupRect = new RectangleF(cupX, cupY, 24, 20);
+        g.FillRoundedRectangle(cupBrush, cupRect, 5);
+        g.DrawRoundedRectangle(blackPen, cupRect, 5);
 
-        // 杯口白边
-        g.FillEllipse(cupRimBrush, cupX + 2, cupY - 2, 24, 6);
-        g.DrawEllipse(blackPen, cupX + 2, cupY - 2, 24, 6);
+        // 杯子把手
+        using var handlePen = new Pen(Color.FromArgb(56, 189, 248), 2.5f);
+        g.DrawArc(handlePen, cupX + 20, cupY + 3, 7, 12, -80, 160);
+        g.DrawArc(blackPen, cupX + 20, cupY + 3, 7, 12, -80, 160);
 
-        // 杯子侧边手柄
-        using var handlePen = new Pen(Color.FromArgb(56, 189, 248), 3f);
-        g.DrawArc(handlePen, cupX + 24, cupY + 4, 8, 12, -80, 160);
-        g.DrawArc(blackPen, cupX + 24, cupY + 4, 8, 12, -80, 160);
+        // 3. 双爪抱杯
+        DrawMittenPaw(g, cupX - 10, cupY + 3, blackPen, whiteBrush);
+        DrawMittenPaw(g, cupX + 14, cupY + 3, blackPen, whiteBrush);
 
-        // 3. 双手捧着小茶杯
-        // 左肉爪
-        g.FillEllipse(whiteBrush, cupX - 10, cupY + 4, 16, 16);
-        g.DrawEllipse(blackPen, cupX - 10, cupY + 4, 16, 16);
+        // 4. 浮动爱心 ❤️ (原版图片同款)
+        DrawFloatingHeart(g, rx + 108, (int)cy - 4, pinkHeartBrush);
+    }
 
-        // 右肉爪
-        g.FillEllipse(whiteBrush, cupX + 22, cupY + 4, 16, 16);
-        g.DrawEllipse(blackPen, cupX + 22, cupY + 4, 16, 16);
+    private void DrawFloatingHeart(Graphics g, int x, int y, Brush brush)
+    {
+        var offset = (float)Math.Sin(_tickCount * 0.1) * 3f;
+        var hx = x;
+        var hy = y + offset;
 
-        // 4. 周围柔和欢呼小星星粒子 ✨
-        DrawGentleSparkles(g, r.X + 60, (int)cy + 20);
+        var path = new GraphicsPath();
+        path.AddBezier(hx, hy + 3, hx - 5, hy - 4, hx - 8, hy + 3, hx, hy + 10);
+        path.AddBezier(hx, hy + 10, hx + 8, hy + 3, hx + 5, hy - 4, hx, hy + 3);
+        g.FillPath(brush, path);
     }
 
     private void DrawSleepZz(Graphics g, int x, int y)
@@ -669,21 +734,6 @@ public class DesktopPetForm : Form
         using var fontZ = new Font("Microsoft YaHei UI", 7.5f, FontStyle.Bold);
         using var zBrush = new SolidBrush(Color.FromArgb(alpha, 148, 163, 184));
         g.DrawString("zZ", fontZ, zBrush, x, y - phase * 14);
-    }
-
-    private void DrawGentleSparkles(Graphics g, int cx, int cy)
-    {
-        var colors = new[] { Color.Gold, Color.HotPink, Color.DeepSkyBlue, Color.LimeGreen };
-        for (int i = 0; i < 5; i++)
-        {
-            var angle = (_tickCount * 0.08 + i * 1.25);
-            var dist = 32 + (i * 7) % 20;
-            var px = cx + (float)Math.Cos(angle) * dist;
-            var py = cy + (float)Math.Sin(angle) * dist;
-
-            using var b = new SolidBrush(colors[i % colors.Length]);
-            g.FillEllipse(b, px, py, 4.5f, 4.5f);
-        }
     }
 
     private void DrawCyberCat(Graphics g, Rectangle r, bool isThinking, bool isCompleted)
