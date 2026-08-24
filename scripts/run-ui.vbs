@@ -17,8 +17,13 @@ If Not FSO.FolderExists(backendDir) Then
     backendDir = rootDir
 End If
 
+On Error Resume Next
+' 清理可能残留的旧进程，防止端口冲突导致托盘图标丢失
+WshShell.Run "taskkill /F /IM ModelFailoverGateway.exe", 0, True
+WScript.Sleep 300
+
 WshShell.CurrentDirectory = backendDir
-WshShell.Run """" & exePath & """ --urls ""http://127.0.0.1:5000""", 0, False
+WshShell.Run """" & exePath & """", 0, False
 
 WScript.Sleep 800
 WshShell.Run "http://127.0.0.1:5000"

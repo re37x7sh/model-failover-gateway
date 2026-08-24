@@ -46,9 +46,10 @@ var app = builder.Build();
 var configService = app.Services.GetRequiredService<IConfigInjectionService>();
 var port = configService.GetConfiguredPort();
 
-// 启动 Windows 系统托盘驻留图标
+// 启动 Windows 系统托盘驻留图标与原生桌面萌宠
 var trayManager = app.Services.GetRequiredService<TrayIconManager>();
-trayManager.Start(port);
+var alertService = app.Services.GetRequiredService<IAlertService>();
+trayManager.Start(port, alertService);
 
 app.UseCors("AllowAll");
 
@@ -95,4 +96,6 @@ app.Map("/{**catchAll}", async (HttpContext context, IProxyEngine proxyEngine) =
 });
 
 // 监听动态配置的端口
-app.Run($"http://127.0.0.1:{port}");
+app.Urls.Clear();
+app.Urls.Add($"http://127.0.0.1:{port}");
+app.Run();

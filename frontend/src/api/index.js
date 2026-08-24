@@ -58,5 +58,11 @@ export const api = {
   // 渠道异常通知
   getNotifications: () => request('/notifications'),
   dismissNotification: (id) => request(`/notifications/${id}/dismiss`, { method: 'POST' }),
-  clearAllNotifications: () => request('/notifications/clear', { method: 'POST' })
+  clearAllNotifications: () => request('/notifications/clear', { method: 'POST' }),
+
+  // 长任务主动提醒与桌面宠物
+  getNotificationSettings: () => request('/notifications/settings'),
+  saveNotificationSettings: (data) => request('/notifications/settings', { method: 'POST', body: JSON.stringify(data) }),
+  getTaskStatus: () => request('/notifications/task-status'),
+  testChime: () => request('/notifications/test-chime', { method: 'POST' })
 };

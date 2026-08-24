@@ -164,6 +164,9 @@ public class ProxyEngine : IProxyEngine
         var isFailoverOccurred = false;
         string? lastErrorDetails = null;
 
+        // 驱动桌面宠物与状态监控进入思考状态
+        _alertService.NotifyTaskStart(requestedModel ?? "AI Model", activeChannels.First().Name);
+
         // 3. 按照优先级顺序依次尝试渠道
         for (var i = 0; i < activeChannels.Count; i++)
         {
@@ -275,6 +278,18 @@ public class ProxyEngine : IProxyEngine
 
                     // 8. 成功响应：100% 字节管道直通（保持 SSE 打字机流式输出）
                     await _channelService.MarkSuccessAsync(channel.Id);
+                    
+                    await StreamPipeResponseWithTokenTrackingAsync(
+                        context, 
+                        upstreamResponse, 
+                        channel.Id, 
+                        channel.Name, 
+                        channel.Group ?? "all", 
+                        apiKey, 
+                        effectiveModel ?? requestedModel, 
+                        effectiveRequestBody,
+                        stopwatch);
+
                     stopwatch.Stop();
 
                     _logService.AddLog(new ProxyLogEntry
@@ -290,15 +305,6 @@ public class ProxyEngine : IProxyEngine
                         IsFailover = isFailoverOccurred
                     });
 
-                    await StreamPipeResponseWithTokenTrackingAsync(
-                        context, 
-                        upstreamResponse, 
-                        channel.Id, 
-                        channel.Name, 
-                        channel.Group ?? "all", 
-                        apiKey, 
-                        effectiveModel ?? requestedModel, 
-                        effectiveRequestBody);
                     channelSuccess = true;
                     return;
                 }
@@ -307,6 +313,7 @@ public class ProxyEngine : IProxyEngine
                     _logger.LogError(ex, "请求渠道 [{Label}] 发生网络异常: {Message}", channelLabel, ex.Message);
                     lastErrorDetails = $"[{channelLabel}] 网络异常: {ex.Message}";
                     _alertService.AddAlert(channel.Id, channelLabel, channel.Group ?? "all", $"网络异常: {ex.Message}");
+                    _alertService.NotifyTaskFailover(effectiveModel ?? requestedModel ?? "AI Model", channelLabel, $"网络异常: {ex.Message}");
 
                     // 如果已经开始向客户端流式输出响应体，无法在中断后再切换渠道或重设状态码
                     if (context.Response.HasStarted)
@@ -432,7 +439,8 @@ public class ProxyEngine : IProxyEngine
         string group,
         string rawApiKey,
         string? model,
-        byte[] requestBodyBytes)
+        byte[] requestBodyBytes,
+        Stopwatch stopwatch)
     {
         context.Response.StatusCode = (int)upstreamResponse.StatusCode;
 
@@ -473,7 +481,7 @@ public class ProxyEngine : IProxyEngine
             _logger.LogWarning(ex, "渠道 [{Channel}] 流式响应在传输中途中断 (上游连接意外关闭/EOF): {Message}", channelName, ex.Message);
         }
 
-        // 提取并在后台安全记录 Token
+        // 提取并在后台安全记录 Token 与触发完成事件
         try
         {
             var sampleText = responseSampleBuilder.ToString();
@@ -488,10 +496,17 @@ public class ProxyEngine : IProxyEngine
                 promptTokens,
                 completionTokens,
                 isStream: true);
+
+            // 触发长任务完成主动通知与桌面宠物联动
+            _alertService.NotifyTaskComplete(
+                model ?? "AI Model", 
+                channelName, 
+                stopwatch.ElapsedMilliseconds, 
+                promptTokens + completionTokens);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Token 统计提取异常");
+            _logger.LogError(ex, "Token 统计提取与任务完成通知异常");
         }
     }
 

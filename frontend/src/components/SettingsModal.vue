@@ -18,6 +18,12 @@
           <span>⚡ 客户端一键接管 & 端口</span>
         </button>
         <button 
+          :class="['modal-tab-btn', { active: activeTab === 'notifications' }]" 
+          @click="activeTab = 'notifications'"
+        >
+          <span>🐾 桌面宠物与长任务提醒</span>
+        </button>
+        <button 
           :class="['modal-tab-btn', { active: activeTab === 'syslogs' }]" 
           @click="switchToLogsTab"
         >
@@ -220,6 +226,101 @@
           </div>
         </div>
 
+        <!-- ==================== Tab 3: 桌面宠物与长任务提醒设置 ==================== -->
+        <div v-else-if="activeTab === 'notifications'" class="tab-content">
+          <div class="glass-card notif-settings-card">
+            <div class="settings-section-title">🐾 灵动桌面悬浮萌宠</div>
+            
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">启用桌面悬浮挂件</span>
+                <span class="setting-hint">在屏幕显示可拖拽的灵动萌宠，实时展示思考打字、撒花庆祝与故障转移状态。</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="notifSettings.enableDesktopPet" @change="saveNotifSettings">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-row" v-if="notifSettings.enableDesktopPet">
+              <div class="setting-info">
+                <span class="setting-name">宠物外观形象</span>
+                <span class="setting-hint">选择您喜欢的赛博伴侣形象</span>
+              </div>
+              <div class="avatar-radio-group">
+                <label :class="['avatar-opt', { active: notifSettings.petAvatar === 'cat' }]">
+                  <input type="radio" value="cat" v-model="notifSettings.petAvatar" @change="saveNotifSettings" />
+                  <span>🐱 赛博猫咪</span>
+                </label>
+                <label :class="['avatar-opt', { active: notifSettings.petAvatar === 'robot' }]">
+                  <input type="radio" value="robot" v-model="notifSettings.petAvatar" @change="saveNotifSettings" />
+                  <span>🤖 灵动机器人</span>
+                </label>
+                <label :class="['avatar-opt', { active: notifSettings.petAvatar === 'dog' }]">
+                  <input type="radio" value="dog" v-model="notifSettings.petAvatar" @change="saveNotifSettings" />
+                  <span>🐶 忠诚柴犬</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card notif-settings-card mt-16">
+            <div class="settings-section-title">🔔 长任务主动完成提醒</div>
+            
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">开启长任务生成完成提醒</span>
+                <span class="setting-hint">当大模型深度思考或长文本生成完毕时，主动提醒您切回查看结果。</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="notifSettings.enableTaskCompleteNotification" @change="saveNotifSettings">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- 智能耗时阈值调节 -->
+            <div class="setting-row" v-if="notifSettings.enableTaskCompleteNotification">
+              <div class="setting-info">
+                <span class="setting-name">智能耗时提醒阈值</span>
+                <span class="setting-hint">仅当任务单次耗时超过此秒数时才提醒，避免极短代码补全频繁打扰。</span>
+              </div>
+              <select v-model.number="notifSettings.taskCompleteThresholdSeconds" class="form-select font-mono" @change="saveNotifSettings">
+                <option :value="1">超过 1 秒 (极度敏感)</option>
+                <option :value="3">超过 3 秒 (轻度任务)</option>
+                <option :value="5">超过 5 秒 (默认推荐)</option>
+                <option :value="10">超过 10 秒 (中长任务)</option>
+                <option :value="15">超过 15 秒 (仅大任务)</option>
+                <option :value="30">超过 30 秒 (仅极长任务)</option>
+              </select>
+            </div>
+
+            <div class="setting-row" v-if="notifSettings.enableTaskCompleteNotification">
+              <div class="setting-info">
+                <span class="setting-name">清脆完成提示音 (Ding-Dong~)</span>
+                <span class="setting-hint">任务完成瞬间播放悦耳和弦音效，无需看屏幕即可获知。</span>
+              </div>
+              <div class="setting-actions">
+                <button class="btn btn-secondary btn-xs" @click="testSound">🔊 试听音效</button>
+                <label class="switch ml-10">
+                  <input type="checkbox" v-model="notifSettings.enableSound" @change="saveNotifSettings">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="setting-row" v-if="notifSettings.enableTaskCompleteNotification">
+              <div class="setting-info">
+                <span class="setting-name">Windows 任务栏系统气泡通知</span>
+                <span class="setting-hint">在 Windows 桌面右下角弹出原生气泡提示（包含耗时与 Token 消耗）。</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="notifSettings.enableBalloon" @change="saveNotifSettings">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <!-- ==================== Tab 2: 系统级运行日志 ==================== -->
         <div v-else-if="activeTab === 'syslogs'" class="tab-content logs-tab-content">
           <!-- 日志操作工具栏 -->
@@ -283,6 +384,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
 import { api } from '../api';
+import { playChimeSound } from '../utils/sound';
 
 const props = defineProps({
   modelValue: {
@@ -298,6 +400,40 @@ const loading = ref(false);
 const savingPort = ref(false);
 const fetchingLogs = ref(false);
 const autoRefreshLogs = ref(true);
+
+const notifSettings = reactive({
+  enableDesktopPet: true,
+  enableTaskCompleteNotification: true,
+  taskCompleteThresholdSeconds: 5,
+  enableSound: true,
+  enableBalloon: true,
+  petAvatar: 'cat'
+});
+
+async function loadNotifSettings() {
+  try {
+    const res = await api.getNotificationSettings();
+    if (res) {
+      Object.assign(notifSettings, res);
+    }
+  } catch (err) {
+    console.error('加载通知配置失败:', err);
+  }
+}
+
+async function saveNotifSettings() {
+  try {
+    await api.saveNotificationSettings(notifSettings);
+    emit('toast', '提醒与宠物设置已实时生效！', 'success');
+  } catch (err) {
+    emit('toast', `保存配置失败: ${err.message}`, 'error');
+  }
+}
+
+function testSound() {
+  playChimeSound();
+  emit('toast', '已播放测试提示音 🎵', 'info');
+}
 
 const sysStatus = reactive({
   port: 5000,
@@ -436,6 +572,7 @@ function formatTime(timeStr) {
 watch(() => props.modelValue, (val) => {
   if (val) {
     loadSystemStatus();
+    loadNotifSettings();
     if (activeTab.value === 'syslogs') {
       fetchSysLogs();
       toggleAutoRefresh();
@@ -451,6 +588,7 @@ watch(() => props.modelValue, (val) => {
 onMounted(() => {
   if (props.modelValue) {
     loadSystemStatus();
+    loadNotifSettings();
   }
 });
 
@@ -878,5 +1016,99 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 2px 8px;
   max-width: 140px;
+}
+
+/* 🐾 桌面宠物与提醒配置面板样式 */
+.notif-settings-card {
+  padding: 18px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.settings-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.setting-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.setting-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.setting-actions {
+  display: flex;
+  align-items: center;
+}
+
+.ml-10 {
+  margin-left: 10px;
+}
+
+.avatar-radio-group {
+  display: flex;
+  gap: 10px;
+}
+
+.avatar-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.avatar-opt input {
+  display: none;
+}
+
+.avatar-opt.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent-primary);
+  color: var(--text-main);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 </style>

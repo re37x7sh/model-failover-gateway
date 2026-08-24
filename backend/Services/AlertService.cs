@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Windows.Forms;
 using ModelFailoverGateway.Models;
 
 namespace ModelFailoverGateway.Services;
 
 /// <summary>
-/// 渠道异常与故障转移告警通知服务实现
+/// 渠道异常与任务完成主动通知服务实现
 /// </summary>
 public class AlertService : IAlertService
 {
@@ -13,11 +14,140 @@ public class AlertService : IAlertService
     private readonly object _lock = new();
     private readonly ILogger<AlertService> _logger;
     private readonly TrayIconManager _trayManager;
+    private readonly string _settingsFilePath;
+    private TaskNotificationSettings _settings = new();
+
+    private TaskStatusEvent _currentTaskStatus = new() { State = "idle" };
 
     public AlertService(ILogger<AlertService> logger, TrayIconManager trayManager)
     {
         _logger = logger;
         _trayManager = trayManager;
+
+        var dataDir = Path.Combine(Directory.GetCurrentDirectory(), "data");
+        if (!Directory.Exists(dataDir))
+        {
+            Directory.CreateDirectory(dataDir);
+        }
+        _settingsFilePath = Path.Combine(dataDir, "notification_settings.json");
+
+        LoadSettings();
+    }
+
+    private void LoadSettings()
+    {
+        try
+        {
+            if (File.Exists(_settingsFilePath))
+            {
+                var json = File.ReadAllText(_settingsFilePath);
+                var loaded = JsonSerializer.Deserialize<TaskNotificationSettings>(json);
+                if (loaded != null)
+                {
+                    _settings = loaded;
+                    _trayManager.IsTaskCompleteNotificationEnabled = _settings.EnableBalloon;
+                    _trayManager.IsSoundEnabled = _settings.EnableSound;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "加载通知设置文件失败");
+        }
+    }
+
+    public TaskNotificationSettings GetNotificationSettings()
+    {
+        lock (_lock)
+        {
+            return _settings;
+        }
+    }
+
+    public void SaveNotificationSettings(TaskNotificationSettings settings)
+    {
+        lock (_lock)
+        {
+            _settings = settings;
+            _trayManager.IsTaskCompleteNotificationEnabled = settings.EnableBalloon;
+            _trayManager.IsSoundEnabled = settings.EnableSound;
+
+            try
+            {
+                var json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(_settingsFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存通知设置文件失败");
+            }
+        }
+    }
+
+    public void NotifyTaskStart(string model, string channelName)
+    {
+        lock (_lock)
+        {
+            _currentTaskStatus = new TaskStatusEvent
+            {
+                State = "thinking",
+                Model = model,
+                ChannelName = channelName,
+                Timestamp = DateTime.Now
+            };
+        }
+    }
+
+    public void NotifyTaskComplete(string model, string channelName, long durationMs, long tokens)
+    {
+        lock (_lock)
+        {
+            _currentTaskStatus = new TaskStatusEvent
+            {
+                State = "completed",
+                Model = model,
+                ChannelName = channelName,
+                DurationMs = durationMs,
+                TotalTokens = tokens,
+                Timestamp = DateTime.Now
+            };
+
+            var durationSec = durationMs / 1000.0;
+            // 智能耗时阈值过滤（只有达到阈值时才触发主动系统提醒）
+            if (_settings.EnableTaskCompleteNotification && durationSec >= _settings.TaskCompleteThresholdSeconds)
+            {
+                _trayManager.ShowTaskCompleteNotification(model, durationMs, tokens);
+            }
+        }
+    }
+
+    public void NotifyTaskFailover(string model, string channelName, string reason)
+    {
+        lock (_lock)
+        {
+            _currentTaskStatus = new TaskStatusEvent
+            {
+                State = "failover",
+                Model = model,
+                ChannelName = channelName,
+                Message = reason,
+                Timestamp = DateTime.Now
+            };
+        }
+    }
+
+    public TaskStatusEvent GetCurrentTaskStatus()
+    {
+        lock (_lock)
+        {
+            // 如果上一个 completed/failover 事件超过 15 秒，自动回退到 idle 状态
+            if ((_currentTaskStatus.State == "completed" || _currentTaskStatus.State == "failover") &&
+                (DateTime.Now - _currentTaskStatus.Timestamp).TotalSeconds > 15)
+            {
+                _currentTaskStatus.State = "idle";
+            }
+            return _currentTaskStatus;
+        }
     }
 
     /// <summary>

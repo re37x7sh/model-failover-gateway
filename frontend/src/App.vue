@@ -1,5 +1,8 @@
 <template>
-  <div class="app-layout">
+  <div v-if="isPetStandalone" class="pet-standalone-canvas">
+    <DesktopPet :is-standalone="true" @open-settings="openFullDashboard" />
+  </div>
+  <div v-else class="app-layout">
     <Header 
       :current-tab="currentTab" 
       :alerts="alerts"
@@ -77,6 +80,9 @@
     />
 
     <Toast ref="toastRef" />
+
+    <!-- 🐾 灵动桌面悬浮萌宠 -->
+    <DesktopPet @open-settings="showSettingsModal = true" />
   </div>
 </template>
 
@@ -85,12 +91,22 @@ import { ref, reactive, onMounted } from 'vue';
 import Header from './components/Header.vue';
 import Toast from './components/Toast.vue';
 import SettingsModal from './components/SettingsModal.vue';
+import DesktopPet from './components/DesktopPet.vue';
 import DashboardView from './views/DashboardView.vue';
 import ChannelsView from './views/ChannelsView.vue';
 import TokenStatsView from './views/TokenStatsView.vue';
 import LogsView from './views/LogsView.vue';
 import GuideView from './views/GuideView.vue';
 import { api } from './api';
+
+const isPetStandalone = ref(
+  window.location.pathname.includes('/pet') || 
+  window.location.search.includes('mode=pet')
+);
+
+function openFullDashboard() {
+  window.open('/', '_blank');
+}
 
 const currentTab = ref('dashboard');
 const showSettingsModal = ref(false);
@@ -302,5 +318,16 @@ onMounted(() => {
 .view-fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+/* 🐾 独立画中画/桌面小窗画布 */
+.pet-standalone-canvas {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  overflow: hidden;
 }
 </style>
