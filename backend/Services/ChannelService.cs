@@ -172,6 +172,7 @@ public class ChannelService : IChannelService
             existing.Models = string.IsNullOrWhiteSpace(channel.Models) ? "*" : channel.Models;
             existing.Group = string.IsNullOrWhiteSpace(channel.Group) ? "all" : channel.Group.Trim();
             existing.ModelMapping = channel.ModelMapping?.Trim() ?? string.Empty;
+            existing.CustomHeaders = channel.CustomHeaders?.Trim() ?? string.Empty;
             existing.Priority = channel.Priority;
             existing.IsEnabled = channel.IsEnabled;
             existing.UpdatedAt = DateTime.UtcNow;

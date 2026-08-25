@@ -227,19 +227,28 @@ function toggleExpand(id) {
   expandedRows[id] = !expandedRows[id];
 }
 
-const HOP_BY_HOP = ['host', 'connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-connection', 'content-length'];
+const IGNORED_COPY_HEADERS = [
+  'host', 'connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-connection', 
+  'content-length', 'content-type', 'authorization', 'x-api-key'
+];
 
 async function copyExtractedHeaders(headers) {
   if (!headers || Object.keys(headers).length === 0) return;
   
   const lines = Object.entries(headers)
-    .filter(([k]) => !HOP_BY_HOP.includes(k.toLowerCase()))
-    .map(([k, v]) => `${k}: ${v}`);
+    .filter(([k]) => !IGNORED_COPY_HEADERS.includes(k.toLowerCase()))
+    .map(([k, v]) => {
+      // 若请求头包含特定请求ID字段，自动优化为动态 {uuid} 占位符
+      if (k.toLowerCase() === 'x-request-id' || k.toLowerCase() === 'x-client-request-id') {
+        return `${k}: {uuid}`;
+      }
+      return `${k}: ${v}`;
+    });
   
   const text = lines.join('\n');
   try {
     await navigator.clipboard.writeText(text);
-    emit('toast', `已提取并复制 ${lines.length} 条请求头，可直接粘贴至渠道配置！`, 'success');
+    emit('toast', `🎉 已提取并复制 ${lines.length} 条特征请求头（已自动排除脱敏Key与传输头），可直接粘贴至渠道配置！`, 'success');
   } catch (err) {
     emit('toast', '复制失败，请手动选择复制', 'error');
   }
