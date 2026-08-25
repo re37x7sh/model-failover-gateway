@@ -82,16 +82,19 @@ public class ProxyEngine : IProxyEngine
             (cleanRequestPath == "/" || string.IsNullOrEmpty(cleanRequestPath)) && 
             requestedGroup == "all")
         {
-            var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-            var indexPath = Path.Combine(wwwroot, "index.html");
-            if (!File.Exists(indexPath))
+            var wwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            if (!Directory.Exists(wwwroot))
             {
-                indexPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "index.html");
+                wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
             }
+            var indexPath = Path.Combine(wwwroot, "index.html");
             if (File.Exists(indexPath))
             {
                 context.Response.StatusCode = StatusCodes.Status200OK;
                 context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+                context.Response.Headers.Pragma = "no-cache";
+                context.Response.Headers.Expires = "0";
                 await context.Response.SendFileAsync(indexPath);
                 return;
             }

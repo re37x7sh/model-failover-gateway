@@ -73,7 +73,18 @@ app.UseCors("AllowAll");
 
 // 5. 静态文件与 SPA 默认页托管（用于承载 Vue 3 管理界面）
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        if (ctx.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            ctx.Context.Response.Headers.Pragma = "no-cache";
+            ctx.Context.Response.Headers.Expires = "0";
+        }
+    }
+});
 
 app.UseRouting();
 
@@ -104,6 +115,9 @@ app.Map("/{**catchAll}", async (HttpContext context, IProxyEngine proxyEngine) =
         if (File.Exists(indexPath))
         {
             context.Response.ContentType = "text/html; charset=utf-8";
+            context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers.Expires = "0";
             await context.Response.SendFileAsync(indexPath);
             return;
         }
