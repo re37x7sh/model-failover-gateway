@@ -103,6 +103,26 @@ public class ProxyEngine : IProxyEngine
         await context.Request.Body.CopyToAsync(memoryStream);
         var rawRequestBody = memoryStream.ToArray();
 
+        // 采集客户端安全请求头（脱敏敏感鉴权字段）用于日志排查与渠道嗅探提取
+        var clientHeadersForLog = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (hKey, hVals) in context.Request.Headers)
+        {
+            if (hKey.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
+            {
+                var authStr = hVals.ToString();
+                clientHeadersForLog[hKey] = authStr.Length > 15 ? $"{authStr[..10]}***" : "Bearer ***";
+            }
+            else if (hKey.Equals("x-api-key", StringComparison.OrdinalIgnoreCase))
+            {
+                var keyStr = hVals.ToString();
+                clientHeadersForLog[hKey] = keyStr.Length > 10 ? $"{keyStr[..6]}***" : "***";
+            }
+            else
+            {
+                clientHeadersForLog[hKey] = hVals.ToString();
+            }
+        }
+
         // 尝试从请求体中提取 model 字段供日志与匹配参考
         string? requestedModel = null;
         if (rawRequestBody.Length > 0)
@@ -215,8 +235,34 @@ public class ProxyEngine : IProxyEngine
                         upstreamRequest.Headers.TryAddWithoutValidation(headerKey, headerValues.ToArray());
                     }
 
-                    // 注入当前尝试的 API Key
-                    if (!string.IsNullOrWhiteSpace(apiKey))
+                    // 4.1 动态解析并注入渠道自定义请求头（支持 Codex 伪装预设与 {header:X-Name} 动态提取）
+                    var customTemplates = channel.GetCustomHeaderTemplates();
+                    var hasCustomAuth = false;
+
+                    foreach (var (tplKey, tplVal) in customTemplates)
+                    {
+                        var resolvedVal = HeaderTemplateResolver.Resolve(
+                            tplVal,
+                            context,
+                            apiKey,
+                            effectiveModel ?? requestedModel ?? string.Empty,
+                            requestedGroup);
+
+                        if (string.IsNullOrWhiteSpace(resolvedVal)) continue;
+
+                        if (tplKey.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+                            tplKey.Equals("x-api-key", StringComparison.OrdinalIgnoreCase))
+                        {
+                            hasCustomAuth = true;
+                        }
+
+                        // 覆盖可能已从客户端透传的旧 Header（如 User-Agent、Editor-Version 等）
+                        upstreamRequest.Headers.Remove(tplKey);
+                        upstreamRequest.Headers.TryAddWithoutValidation(tplKey, resolvedVal);
+                    }
+
+                    // 4.2 若自定义请求头中未显式指定鉴权，则注入当前渠道的 API Key
+                    if (!hasCustomAuth && !string.IsNullOrWhiteSpace(apiKey))
                     {
                         upstreamRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
                         upstreamRequest.Headers.TryAddWithoutValidation("x-api-key", apiKey);
@@ -271,7 +317,8 @@ public class ProxyEngine : IProxyEngine
                             StatusCode = (int)upstreamResponse.StatusCode,
                             DurationMs = stopwatch.ElapsedMilliseconds,
                             IsFailover = isFailoverOccurred,
-                            ErrorDetails = errorText
+                            ErrorDetails = errorText,
+                            RequestHeaders = clientHeadersForLog
                         });
                         return;
                     }
@@ -302,7 +349,8 @@ public class ProxyEngine : IProxyEngine
                         FinalChannel = channelLabel,
                         StatusCode = (int)upstreamResponse.StatusCode,
                         DurationMs = stopwatch.ElapsedMilliseconds,
-                        IsFailover = isFailoverOccurred
+                        IsFailover = isFailoverOccurred,
+                        RequestHeaders = clientHeadersForLog
                     });
 
                     channelSuccess = true;
@@ -361,7 +409,8 @@ public class ProxyEngine : IProxyEngine
             StatusCode = 502,
             DurationMs = stopwatch.ElapsedMilliseconds,
             IsFailover = true,
-            ErrorDetails = lastErrorDetails ?? "所有上游渠道均不可用"
+            ErrorDetails = lastErrorDetails ?? "所有上游渠道均不可用",
+            RequestHeaders = clientHeadersForLog
         });
     }
 

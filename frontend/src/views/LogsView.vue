@@ -152,21 +152,41 @@
               <td class="font-mono">{{ log.durationMs }}ms</td>
               <td>
                 <button 
-                  v-if="log.errorDetails" 
+                  v-if="log.errorDetails || (log.requestHeaders && Object.keys(log.requestHeaders).length > 0)" 
                   class="btn btn-secondary btn-sm" 
                   @click="toggleExpand(log.id)"
                 >
-                  {{ expandedRows[log.id] ? '收起详情' : '错误详情' }}
+                  {{ expandedRows[log.id] ? '收起详情' : '详情 / 头' }}
                 </button>
+                <span v-else class="text-dim">-</span>
               </td>
             </tr>
 
-            <!-- 展开的错误详情 -->
+            <!-- 展开的详情与请求头嗅探 -->
             <tr v-if="expandedRows[log.id]" class="detail-row">
               <td colspan="8">
-                <div class="error-detail-box">
-                  <div class="detail-title">错误与重试排查信息：</div>
-                  <pre class="detail-content">{{ log.errorDetails }}</pre>
+                <div class="expanded-detail-container">
+                  <!-- 错误信息 -->
+                  <div v-if="log.errorDetails" class="error-detail-box">
+                    <div class="detail-title">❌ 错误与重试排查信息：</div>
+                    <pre class="detail-content">{{ log.errorDetails }}</pre>
+                  </div>
+
+                  <!-- 嗅探到的请求头 -->
+                  <div v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="headers-detail-box">
+                    <div class="headers-detail-header">
+                      <span class="detail-title header-title">📥 客户端请求头 (嗅探提取结果)：</span>
+                      <button class="btn btn-primary btn-xs" @click="copyExtractedHeaders(log.requestHeaders)">
+                        📋 提取并复制为渠道请求头配置
+                      </button>
+                    </div>
+                    <div class="headers-grid">
+                      <div v-for="(val, key) in log.requestHeaders" :key="key" class="header-item">
+                        <span class="header-key font-mono">{{ key }}:</span>
+                        <span class="header-val font-mono">{{ val }}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </td>
             </tr>
@@ -205,6 +225,24 @@ const expandedRows = reactive({});
 
 function toggleExpand(id) {
   expandedRows[id] = !expandedRows[id];
+}
+
+const HOP_BY_HOP = ['host', 'connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-connection', 'content-length'];
+
+async function copyExtractedHeaders(headers) {
+  if (!headers || Object.keys(headers).length === 0) return;
+  
+  const lines = Object.entries(headers)
+    .filter(([k]) => !HOP_BY_HOP.includes(k.toLowerCase()))
+    .map(([k, v]) => `${k}: ${v}`);
+  
+  const text = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    emit('toast', `已提取并复制 ${lines.length} 条请求头，可直接粘贴至渠道配置！`, 'success');
+  } catch (err) {
+    emit('toast', '复制失败，请手动选择复制', 'error');
+  }
 }
 
 const filteredLogs = computed(() => {
@@ -521,9 +559,65 @@ async function clearLogs() {
   background: rgba(0, 0, 0, 0.2);
 }
 
-.error-detail-box {
+.expanded-detail-container {
   padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-detail-box {
   font-size: 12px;
+}
+
+.headers-detail-box {
+  font-size: 12px;
+}
+
+.headers-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.header-title {
+  color: var(--primary) !important;
+}
+
+.btn-xs {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.headers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.header-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.header-key {
+  color: var(--accent-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-val {
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-title {

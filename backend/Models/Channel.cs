@@ -91,6 +91,36 @@ public class Channel
     }
 
     /// <summary>
+    /// 自定义请求头配置（每行一个 HeaderName: HeaderValue，支持 {header:X-Name}、{uuid}、{apiKey}、{model} 动态变量模板）
+    /// </summary>
+    public string CustomHeaders { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 获取解析后的自定义请求头模板字典
+    /// </summary>
+    public Dictionary<string, string> GetCustomHeaderTemplates()
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(CustomHeaders)) return dict;
+
+        var lines = CustomHeaders.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var line in lines)
+        {
+            var idx = line.IndexOf(':');
+            if (idx > 0)
+            {
+                var key = line.Substring(0, idx).Trim();
+                var val = line.Substring(idx + 1).Trim();
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    dict[key] = val;
+                }
+            }
+        }
+        return dict;
+    }
+
+    /// <summary>
     /// 判断当前渠道是否匹配请求指定的分组
     /// </summary>
     public bool IsGroupMatch(string? requestedGroup)

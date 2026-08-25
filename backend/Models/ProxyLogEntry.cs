@@ -17,6 +17,7 @@ public class ProxyLogEntry
     public long DurationMs { get; set; }
     public bool IsFailover { get; set; }
     public string? ErrorDetails { get; set; }
+    public Dictionary<string, string>? RequestHeaders { get; set; }
 }
 
 /// <summary>

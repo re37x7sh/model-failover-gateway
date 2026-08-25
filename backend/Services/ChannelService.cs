@@ -268,12 +268,38 @@ public class ChannelService : IChannelService
             var targetUri = $"{baseUrl}/models";
             
             using var request = new HttpRequestMessage(HttpMethod.Get, targetUri);
-            if (!string.IsNullOrWhiteSpace(primaryKey))
+            
+            // 注入自定义请求头模板（包含 Codex 客户端模拟头等）
+            var customTemplates = channel.GetCustomHeaderTemplates();
+            var hasCustomAuth = false;
+
+            foreach (var (tplKey, tplVal) in customTemplates)
             {
-                request.Headers.Add("Authorization", $"Bearer {primaryKey}");
-                request.Headers.Add("x-api-key", primaryKey);
+                var resolvedVal = HeaderTemplateResolver.Resolve(
+                    tplVal, 
+                    null, 
+                    primaryKey, 
+                    "gpt-5.6-sol", 
+                    channel.Group ?? "all");
+
+                if (string.IsNullOrWhiteSpace(resolvedVal)) continue;
+
+                if (tplKey.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+                    tplKey.Equals("x-api-key", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasCustomAuth = true;
+                }
+
+                request.Headers.Remove(tplKey);
+                request.Headers.TryAddWithoutValidation(tplKey, resolvedVal);
             }
-            request.Headers.Add("anthropic-version", "2023-06-01");
+
+            if (!hasCustomAuth && !string.IsNullOrWhiteSpace(primaryKey))
+            {
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {primaryKey}");
+                request.Headers.TryAddWithoutValidation("x-api-key", primaryKey);
+            }
+            request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             var response = await client.SendAsync(request, cts.Token);

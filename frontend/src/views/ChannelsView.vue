@@ -126,6 +126,12 @@
                 <span class="detail-label">匹配模型:</span>
                 <span class="code-tag">{{ channel.models || '*' }}</span>
               </div>
+              <div v-if="channel.customHeaders" class="detail-item">
+                <span class="detail-label">自定义头:</span>
+                <span class="badge badge-warning" :title="channel.customHeaders">
+                  🎭 {{ getHeaderCount(channel.customHeaders) }} 条规则 (含客户端伪装/提取)
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -148,6 +154,9 @@
             >
               <span v-if="testingChannelId === channel.id">⏳ 探测中...</span>
               <span v-else>🔍 探测</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" @click="openCloneModal(channel)" title="复制此渠道配置另存为新渠道">
+              📑 复制
             </button>
             <button class="btn btn-secondary btn-sm" @click="openEditModal(channel)">
               ✏️ 编辑
@@ -236,6 +245,40 @@
               placeholder="例如：&#10;claude-3-7-sonnet => gpt-5.6-sol&#10;claude-3-5-sonnet-20241022 => claude-3-5-sonnet&#10;* => gpt-5.6-sol" 
             ></textarea>
             <span class="form-tip">💡 提示：当客户端发起请求时，网关将在发往上游前自动把客户端的模型名重写为上游中转站指定的模型名。</span>
+          </div>
+
+          <!-- 自定义请求头与客户端伪装/提取 -->
+          <div class="form-group">
+            <div class="form-label-row">
+              <label class="form-label">自定义请求头与客户端伪装 (每行一条 Header: Value)</label>
+              <div class="preset-badge-group">
+                <button type="button" class="btn-xs btn-preset" @click="applyHeaderPreset('codex')">🎭 模拟 Codex 专享头</button>
+                <button type="button" class="btn-xs btn-preset" @click="applyHeaderPreset('openai_org')">🏢 OpenAI 组织</button>
+                <button type="button" class="btn-xs btn-preset" @click="applyHeaderPreset('anthropic_cache')">⚡ Anthropic 缓存</button>
+                <button type="button" class="btn-xs btn-preset" @click="applyHeaderPreset('extract_template')">📥 客户端提取模板</button>
+              </div>
+            </div>
+            <textarea 
+              v-model="form.customHeaders" 
+              class="form-input font-mono key-textarea" 
+              rows="3"
+              placeholder="例如：&#10;User-Agent: GithubCopilot/1.155.0 (VSCode/1.90.0)&#10;Editor-Version: vscode/1.90.0&#10;Openai-Intent: conversation-panel&#10;X-Custom-Tenant: {header:X-Tenant-Key:-default}&#10;Authorization: Bearer {header:Authorization:-{apiKey}}" 
+            ></textarea>
+            <div class="header-help-toggle" @click="showSyntaxHelp = !showSyntaxHelp">
+              <span>{{ showSyntaxHelp ? '▼ 收起动态变量提取语法说明' : '▶ 查看动态变量提取语法说明 ({header:xxx}, {uuid}, {apiKey}...)' }}</span>
+            </div>
+            <div v-if="showSyntaxHelp" class="syntax-help-box">
+              <div class="syntax-grid">
+                <div><code>{header:X-Name}</code>: 提取客户端传入的指定请求头</div>
+                <div><code>{header:X-Name:-default}</code>: 提取请求头，未传时回退默认值</div>
+                <div><code>{uuid}</code>: 自动生成唯一的 32 位请求 GUID</div>
+                <div><code>{apiKey}</code>: 当前渠道正在尝试的有效 API Key</div>
+                <div><code>{model}</code>: 目标调用的模型名称</div>
+                <div><code>{client_ip}</code>: 客户端真实 IP 地址</div>
+                <div><code>{timestamp}</code>: 当前 Unix 毫秒时间戳</div>
+              </div>
+            </div>
+            <span class="form-tip">💡 提示：用于突破上游仅允许特定客户端（如 Codex/Copilot）调用的限制，或从客户端请求中提取指定 Header 转发给上游。</span>
           </div>
 
           <div class="form-group">
@@ -348,6 +391,7 @@ const isEdit = ref(false);
 const saving = ref(false);
 const testingModal = ref(false);
 const modalTestResult = ref(null);
+const showSyntaxHelp = ref(false);
 
 const form = reactive({
   id: '',
@@ -357,6 +401,7 @@ const form = reactive({
   baseUrl: '',
   apiKey: '',
   modelMapping: '',
+  customHeaders: '',
   models: '*',
   priority: 1,
   isEnabled: true
@@ -367,6 +412,50 @@ function getApiKeyList(apiKeyStr) {
   return apiKeyStr.split(/[\r\n,;]+/)
     .map(k => k.trim())
     .filter(k => k.length > 0);
+}
+
+function getHeaderCount(headersStr) {
+  if (!headersStr) return 0;
+  return headersStr.split(/[\r\n]+/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && l.includes(':')).length;
+}
+
+function applyHeaderPreset(type) {
+  if (type === 'codex') {
+    const codexHeaders = [
+      'User-Agent: GithubCopilot/1.155.0 (VSCode/1.90.0)',
+      'Editor-Version: vscode/1.90.0',
+      'Editor-Plugin-Version: copilot/1.155.0',
+      'Openai-Organization: github-copilot',
+      'Openai-Intent: conversation-panel',
+      'X-Github-Api-Version: 2023-07-07',
+      'X-Request-Id: {uuid}',
+      'Accept: application/json, text/event-stream'
+    ].join('\n');
+    form.customHeaders = form.customHeaders && form.customHeaders.trim() 
+      ? form.customHeaders.trim() + '\n' + codexHeaders 
+      : codexHeaders;
+    emit('toast', '已载入 Codex / Copilot 官方客户端模拟头预设', 'success');
+  } else if (type === 'openai_org') {
+    const org = 'OpenAI-Organization: org-your-org-id\nOpenAI-Project: proj-your-proj-id';
+    form.customHeaders = form.customHeaders && form.customHeaders.trim() 
+      ? form.customHeaders.trim() + '\n' + org 
+      : org;
+    emit('toast', '已添加 OpenAI 组织与项目头模板', 'info');
+  } else if (type === 'anthropic_cache') {
+    const cache = 'anthropic-version: 2023-06-01\nanthropic-beta: prompt-caching-2024-07-25';
+    form.customHeaders = form.customHeaders && form.customHeaders.trim() 
+      ? form.customHeaders.trim() + '\n' + cache 
+      : cache;
+    emit('toast', '已添加 Anthropic 缓存头模板', 'info');
+  } else if (type === 'extract_template') {
+    const extract = 'X-Forwarded-User: {header:X-User-Id:-anonymous}\nAuthorization: Bearer {header:Authorization:-{apiKey}}';
+    form.customHeaders = form.customHeaders && form.customHeaders.trim() 
+      ? form.customHeaders.trim() + '\n' + extract 
+      : extract;
+    emit('toast', '已添加客户端 Header 动态提取示例', 'info');
+  }
 }
 
 const formKeyCount = computed(() => {
@@ -479,6 +568,7 @@ const addDraftForm = reactive({
   baseUrl: '',
   apiKey: '',
   modelMapping: '',
+  customHeaders: '',
   models: '*',
   priority: null,
   isEnabled: true
@@ -493,6 +583,7 @@ function syncAddDraft() {
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
       modelMapping: form.modelMapping,
+      customHeaders: form.customHeaders,
       models: form.models,
       priority: form.priority,
       isEnabled: form.isEnabled
@@ -508,6 +599,7 @@ function resetAddDraft() {
     baseUrl: '',
     apiKey: '',
     modelMapping: '',
+    customHeaders: '',
     models: '*',
     priority: null,
     isEnabled: true
@@ -524,6 +616,7 @@ function openAddModal() {
   form.baseUrl = addDraftForm.baseUrl || '';
   form.apiKey = addDraftForm.apiKey || '';
   form.modelMapping = addDraftForm.modelMapping || '';
+  form.customHeaders = addDraftForm.customHeaders || '';
   form.models = addDraftForm.models || '*';
   form.priority = addDraftForm.priority || (props.channels.length + 1);
   form.isEnabled = addDraftForm.isEnabled !== false;
@@ -548,11 +641,38 @@ function openEditModal(channel) {
   form.baseUrl = channel.baseUrl;
   form.apiKey = channel.apiKey;
   form.modelMapping = channel.modelMapping || '';
+  form.customHeaders = channel.customHeaders || '';
   form.models = channel.models || '*';
   form.priority = channel.priority;
   form.isEnabled = channel.isEnabled;
   modalTestResult.value = null;
   showModal.value = true;
+}
+
+function openCloneModal(channel) {
+  isEdit.value = false;
+  form.id = '';
+  form.name = `${channel.name} (副本)`;
+  
+  const g = (channel.group || 'all').toLowerCase();
+  if (g === 'all' || g === 'claude' || g === 'codex') {
+    form.groupSelect = g;
+    form.customGroup = '';
+  } else {
+    form.groupSelect = 'custom';
+    form.customGroup = channel.group || '';
+  }
+
+  form.baseUrl = channel.baseUrl;
+  form.apiKey = channel.apiKey;
+  form.modelMapping = channel.modelMapping || '';
+  form.customHeaders = channel.customHeaders || '';
+  form.models = channel.models || '*';
+  form.priority = props.channels.length + 1;
+  form.isEnabled = true;
+  modalTestResult.value = null;
+  showModal.value = true;
+  emit('toast', `已载入 [${channel.name}] 配置副本，可修改后直接保存为新渠道`, 'info');
 }
 
 function closeModal() {
@@ -579,7 +699,8 @@ async function testFormChannel() {
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
       models: form.models,
-      modelMapping: form.modelMapping
+      modelMapping: form.modelMapping,
+      customHeaders: form.customHeaders
     });
     modalTestResult.value = result;
   } catch (err) {
@@ -600,6 +721,7 @@ async function saveChannel() {
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
       modelMapping: form.modelMapping,
+      customHeaders: form.customHeaders,
       models: form.models,
       priority: form.priority,
       isEnabled: form.isEnabled
@@ -1028,5 +1150,63 @@ async function confirmDelete(channel) {
 .footer-right-actions {
   display: flex;
   gap: 10px;
+}
+
+.preset-badge-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn-preset {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-preset:hover {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.header-help-toggle {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.header-help-toggle:hover {
+  text-decoration: underline;
+}
+
+.syntax-help-box {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.syntax-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.syntax-grid code {
+  color: var(--primary);
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
 }
 </style>

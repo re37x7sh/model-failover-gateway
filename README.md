@@ -105,6 +105,23 @@
 - **渠道间级联故障转移**：当前渠道耗尽或不可用时，单次请求内自动顺序尝试下一优先级渠道；
 - **透明模型别名映射 (Model Alias)**：支持配置映射（如 `claude-3-7-sonnet => gpt-5.6-sol`），请求发往上游前自动改写。
 
+### 10. 🎭 自定义请求头与 Codex 客户端伪装 / 动态提取 (Custom Headers & Codex Spoofing)
+- **突破专用客户端限制**：允许任意 AI 工具（如 Claude Code、Cline、Cursor、Continue、Python SDK 等）无缝调用仅限 Codex/Copilot 才能访问的上游限制渠道；
+- **内置官方级一键伪装预设**：
+  - **🎭 模拟 Codex 专享头**：自动注入 `User-Agent: GithubCopilot/...`、`Editor-Version: vscode/...`、`Openai-Organization: github-copilot`、`Openai-Intent: conversation-panel` 等全套特征头；
+  - **🏢 OpenAI 组织与项目头**：注入 `OpenAI-Organization` / `OpenAI-Project`；
+  - **⚡ Anthropic 缓存头**：注入 `anthropic-version` 与 `anthropic-beta`；
+- **强大的动态变量插值引擎**：
+  - `{header:X-Name}`：从客户端原始请求中动态提取指定请求头；
+  - `{header:X-Name:-default}`：提取请求头，未提供时回退到默认值；
+  - `{uuid}`：每次请求动态生成唯一的 32 位 GUID（防止 RequestId 重复拦截）；
+  - `{apiKey}`、`{model}`、`{client_ip}`、`{timestamp}`：插值当前渠道 Key、目标模型、客户端 IP 及时间戳；
+- **📥 实时请求头嗅探与一键提取**：在「实时日志」中可直观查看任意真实客户端发送的原始请求头，并支持一键 `[ 📋 提取并复制为渠道请求头配置 ]`，免除手动抓包。
+
+### 11. 📑 渠道一键复制与另存为 (Channel Duplication)
+- **配置快速复用**：在渠道卡片操作栏点击 **`📑 复制`**，即可一键将该渠道的 BaseUrl、Key 列表、模型别名映射、自定义请求头与分组完整载入新建弹窗；
+- **微调另存为**：支持修改局部参数后直接另存为一个全新的模型渠道，极大提升多 Key、多分组、不同模型映射渠道的配置效率。
+
 ---
 
 ## 📂 辅助工具脚本 (`scripts/` 目录)
