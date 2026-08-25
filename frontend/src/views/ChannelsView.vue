@@ -117,7 +117,7 @@
                   <button class="icon-btn" @click="toggleShowKey(channel.id)" title="显隐 API Key">
                     {{ showKeyMap[channel.id] ? '👁️' : '🔒' }}
                   </button>
-                  <button class="icon-btn" @click="copyText(channel.apiKey, 'API Key 已复制')" title="复制全部 API Key">
+                  <button class="icon-btn" @click="copyText(channel.apiKey, 'API Key 已复制到剪贴板')" title="仅复制 API Key 文本">
                     📋
                   </button>
                 </div>
@@ -155,8 +155,14 @@
               <span v-if="testingChannelId === channel.id">⏳ 探测中...</span>
               <span v-else>🔍 探测</span>
             </button>
-            <button class="btn btn-secondary btn-sm" @click="openCloneModal(channel)" title="复制此渠道配置另存为新渠道">
-              📑 复制
+            <button 
+              class="btn btn-secondary btn-sm" 
+              @click="cloneChannelDirectly(channel)" 
+              :disabled="cloningChannelId === channel.id"
+              title="一键完整克隆该渠道的所有配置（BaseURL/Key/请求头/别名映射等）并直接生成新渠道"
+            >
+              <span v-if="cloningChannelId === channel.id">⏳ 克隆中...</span>
+              <span v-else>📑 克隆渠道</span>
             </button>
             <button class="btn btn-secondary btn-sm" @click="openEditModal(channel)">
               ✏️ 编辑
@@ -392,6 +398,7 @@ const saving = ref(false);
 const testingModal = ref(false);
 const modalTestResult = ref(null);
 const showSyntaxHelp = ref(false);
+const cloningChannelId = ref(null);
 
 const form = reactive({
   id: '',
@@ -649,30 +656,42 @@ function openEditModal(channel) {
   showModal.value = true;
 }
 
-function openCloneModal(channel) {
-  isEdit.value = false;
-  form.id = '';
-  form.name = `${channel.name} (副本)`;
-  
-  const g = (channel.group || 'all').toLowerCase();
-  if (g === 'all' || g === 'claude' || g === 'codex') {
-    form.groupSelect = g;
-    form.customGroup = '';
-  } else {
-    form.groupSelect = 'custom';
-    form.customGroup = channel.group || '';
+function generateCloneName(originalName) {
+  const existingNames = new Set(props.channels.map(c => (c.name || '').trim().toLowerCase()));
+  let candidate = `${originalName} (副本)`;
+  if (!existingNames.has(candidate.toLowerCase())) {
+    return candidate;
   }
+  let index = 2;
+  while (existingNames.has(`${originalName} (副本${index})`.toLowerCase())) {
+    index++;
+  }
+  return `${originalName} (副本${index})`;
+}
 
-  form.baseUrl = channel.baseUrl;
-  form.apiKey = channel.apiKey;
-  form.modelMapping = channel.modelMapping || '';
-  form.customHeaders = channel.customHeaders || '';
-  form.models = channel.models || '*';
-  form.priority = props.channels.length + 1;
-  form.isEnabled = true;
-  modalTestResult.value = null;
-  showModal.value = true;
-  emit('toast', `已载入 [${channel.name}] 配置副本，可修改后直接保存为新渠道`, 'info');
+async function cloneChannelDirectly(channel) {
+  cloningChannelId.value = channel.id;
+  try {
+    const clonedName = generateCloneName(channel.name);
+    const payload = {
+      name: clonedName,
+      group: channel.group || 'all',
+      baseUrl: channel.baseUrl,
+      apiKey: channel.apiKey,
+      modelMapping: channel.modelMapping || '',
+      customHeaders: channel.customHeaders || '',
+      models: channel.models || '*',
+      priority: props.channels.length + 1,
+      isEnabled: true
+    };
+    await api.createChannel(payload);
+    emit('toast', `🎉 已成功克隆整条渠道配置为 [${clonedName}] 并即刻生效！`, 'success');
+    emit('refresh');
+  } catch (err) {
+    emit('toast', `克隆渠道失败: ${err.message}`, 'error');
+  } finally {
+    cloningChannelId.value = null;
+  }
 }
 
 function closeModal() {
