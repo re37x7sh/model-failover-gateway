@@ -103,8 +103,17 @@
             </div>
 
             <div class="channel-details-grid">
+              <div class="detail-item client-endpoint-highlight">
+                <span class="detail-label endpoint-label">👉 本地调用 Base URL:</span>
+                <div class="endpoint-val-box">
+                  <span class="code-tag font-mono highlight-url">{{ getClientEndpoint(channel) }}</span>
+                  <button class="icon-btn" @click="copyText(getClientEndpoint(channel), '本地调用 Base URL 已复制')" title="复制此渠道在 VSCode/Cursor/插件中配置的本地 Base URL">
+                    📋
+                  </button>
+                </div>
+              </div>
               <div class="detail-item">
-                <span class="detail-label">Base URL:</span>
+                <span class="detail-label">上游服务 Base URL:</span>
                 <span class="code-tag">{{ channel.baseUrl }}</span>
               </div>
               <div class="detail-item">
@@ -210,13 +219,24 @@
             <input 
               v-model="form.customGroup" 
               class="form-input font-mono" 
-              placeholder="例如：my-special-group (可通过 /my-special-group/v1 访问)" 
+              placeholder="例如：Copilot / my-special-group" 
               required 
             />
           </div>
 
+          <!-- 实时客户端调用地址提示框 -->
+          <div class="group-endpoint-preview">
+            <div class="preview-title">💡 客户端（VSCode / Cursor / Continue）中配置的 Base URL：</div>
+            <div class="preview-row">
+              <span class="code-tag font-mono highlight-url">{{ getFormClientEndpoint() }}</span>
+              <button type="button" class="btn btn-secondary btn-xs" @click="copyText(getFormClientEndpoint(), '客户端 Base URL 已复制')">
+                📋 复制调用地址
+              </button>
+            </div>
+          </div>
+
           <div class="form-group">
-            <label class="form-label">Base URL (上游服务地址) <span class="required">*</span></label>
+            <label class="form-label">上游 Base URL (服务商接口地址) <span class="required">*</span></label>
             <input 
               v-model="form.baseUrl" 
               class="form-input font-mono" 
@@ -426,6 +446,37 @@ function getHeaderCount(headersStr) {
   return headersStr.split(/[\r\n]+/)
     .map(l => l.trim())
     .filter(l => l.length > 0 && l.includes(':')).length;
+}
+
+function getClientEndpoint(channel) {
+  const origin = window.location.origin || 'http://127.0.0.1:5000';
+  const g = (channel?.group || 'all').toLowerCase();
+  if (g === 'all' || !g) {
+    return `${origin}/v1`;
+  }
+  if (g === 'claude') {
+    return `${origin}/claude`;
+  }
+  if (g === 'codex') {
+    return `${origin}/codex/v1`;
+  }
+  return `${origin}/${channel.group}/v1`;
+}
+
+function getFormClientEndpoint() {
+  const origin = window.location.origin || 'http://127.0.0.1:5000';
+  const finalGroup = (form.groupSelect === 'custom' ? form.customGroup : form.groupSelect) || 'all';
+  const g = finalGroup.toLowerCase();
+  if (g === 'all' || !g) {
+    return `${origin}/v1`;
+  }
+  if (g === 'claude') {
+    return `${origin}/claude (或 ${origin}/claude/v1)`;
+  }
+  if (g === 'codex') {
+    return `${origin}/codex/v1`;
+  }
+  return `${origin}/${finalGroup}/v1`;
 }
 
 function applyHeaderPreset(type) {
@@ -1227,5 +1278,55 @@ async function confirmDelete(channel) {
   padding: 1px 4px;
   border-radius: 3px;
   font-family: var(--font-mono);
+}
+
+.client-endpoint-highlight {
+  grid-column: 1 / -1;
+  background: rgba(99, 102, 241, 0.08);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  margin-bottom: 4px;
+}
+
+.endpoint-label {
+  color: var(--primary) !important;
+  font-weight: 700 !important;
+}
+
+.endpoint-val-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.highlight-url {
+  color: #818cf8 !important;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 3px 8px;
+}
+
+.group-endpoint-preview {
+  background: var(--bg-surface-2);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview-title {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

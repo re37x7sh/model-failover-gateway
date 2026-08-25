@@ -107,7 +107,7 @@ claude</code></pre>
       <div class="glass-card guide-card">
         <div class="guide-header">
           <span class="guide-badge">🌐 通用端点</span>
-          <h3 class="guide-title">通用兼容端点 (所有渠道均可使用)</h3>
+          <h3 class="guide-title">通用兼容端点 (所有通用渠道)</h3>
         </div>
         <p class="guide-desc">使用通用端点将根据优先级尝试所有<strong>通用 (All)</strong> 渠道：</p>
 
@@ -117,6 +117,39 @@ claude</code></pre>
             <div class="config-val-box">
               <span class="code-tag font-mono">http://127.0.0.1:5000/v1</span>
               <button class="btn btn-secondary btn-sm" @click="copyText('http://127.0.0.1:5000/v1', '通用 Base URL 已复制')">复制</button>
+            </div>
+          </div>
+          <div class="config-row">
+            <span class="config-key">API Key:</span>
+            <div class="config-val-box">
+              <span class="code-tag font-mono">sk-local-proxy</span>
+              <button class="btn btn-secondary btn-sm" @click="copyText('sk-local-proxy', 'Key 已复制')">复制</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. 自定义专属分组端点 (例如 Copilot / 自建分组) -->
+      <div class="glass-card guide-card">
+        <div class="guide-header">
+          <span class="guide-badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">🏷️ 自定义分组</span>
+          <h3 class="guide-title">自定义专属分组端点 (如 Copilot / 隔离渠道)</h3>
+        </div>
+        <p class="guide-desc">当您在渠道管理中创建了自定义分组标签（例如 <code>Copilot</code>）时，客户端可直接使用专属路由端点：</p>
+
+        <div class="config-table">
+          <div class="config-row">
+            <span class="config-key">专属 Base URL:</span>
+            <div class="config-val-box">
+              <span class="code-tag font-mono">http://127.0.0.1:5000/{分组名称}/v1</span>
+              <button class="btn btn-secondary btn-sm" @click="copyText('http://127.0.0.1:5000/copilot/v1', '示例 Copilot Base URL 已复制')">复制示例</button>
+            </div>
+          </div>
+          <div class="config-row">
+            <span class="config-key">以 Copilot 为例:</span>
+            <div class="config-val-box">
+              <span class="code-tag font-mono highlight-url">http://127.0.0.1:5000/copilot/v1</span>
+              <button class="btn btn-secondary btn-sm" @click="copyText('http://127.0.0.1:5000/copilot/v1', 'Copilot Base URL 已复制')">复制</button>
             </div>
           </div>
           <div class="config-row">
