@@ -14,6 +14,19 @@
           <span v-if="testingAll">⏳ 正在测试...</span>
           <span v-else>🔍 批量探测连通性</span>
         </button>
+        <button class="btn btn-secondary" @click="exportChannelsConfig" :disabled="channels.length === 0" title="导出全量渠道配置 JSON 备份">
+          <span>💾 备份导出</span>
+        </button>
+        <button class="btn btn-secondary" @click="triggerFileInput" title="从 JSON 备份文件导入渠道配置">
+          <span>📥 导入配置</span>
+        </button>
+        <input 
+          type="file" 
+          ref="fileInputRef" 
+          accept=".json" 
+          style="display: none" 
+          @change="handleFileImport" 
+        />
         <button class="btn btn-primary" @click="openAddModal">
           <span>➕ 添加新渠道</span>
         </button>
@@ -89,6 +102,11 @@
               <!-- 模型映射标签 -->
               <span v-if="channel.modelMapping" class="badge badge-success" :title="`模型映射规则:\n${channel.modelMapping}`">
                 🔄 模型别名映射
+              </span>
+
+              <!-- 独立上游代理标签 -->
+              <span v-if="channel.proxyUrl" class="badge badge-info font-mono" :title="`该渠道上游网络代理: ${channel.proxyUrl}`">
+                🌐 代理: {{ channel.proxyUrl }}
               </span>
 
               <!-- 智能熔断冷却标签 -->
@@ -320,6 +338,25 @@
             />
           </div>
 
+          <!-- 上游网络代理配置 -->
+          <div class="form-group">
+            <div class="form-label-row">
+              <label class="form-label">上游网络代理 (可选，用于官方API或需翻墙渠道)</label>
+              <div class="preset-badge-group">
+                <button type="button" class="btn-xs btn-preset" @click="form.proxyUrl = 'http://127.0.0.1:7890'">Clash (7890)</button>
+                <button type="button" class="btn-xs btn-preset" @click="form.proxyUrl = 'http://127.0.0.1:10808'">v2ray (10808)</button>
+                <button type="button" class="btn-xs btn-preset" @click="form.proxyUrl = 'http://127.0.0.1:7897'">Verge (7897)</button>
+                <button type="button" class="btn-xs btn-preset" @click="form.proxyUrl = ''">清空直连</button>
+              </div>
+            </div>
+            <input 
+              v-model="form.proxyUrl" 
+              class="form-input font-mono" 
+              placeholder="例如：http://127.0.0.1:7890 或 socks5://127.0.0.1:10808 (留空为直接连接)" 
+            />
+            <span class="form-tip">💡 提示：若配置了代理，发往该渠道的连通性测试与模型请求均自动走此代理，国内中转站与海外官方渠道可无缝混用。</span>
+          </div>
+
           <div class="form-row">
             <div class="form-group flex-1">
               <label class="form-label">优先级 (数值越小越靠前)</label>
@@ -431,6 +468,7 @@ const form = reactive({
   customGroup: '',
   baseUrl: '',
   apiKey: '',
+  proxyUrl: '',
   modelMapping: '',
   customHeaders: '',
   models: '*',
@@ -629,6 +667,7 @@ const addDraftForm = reactive({
   customGroup: '',
   baseUrl: '',
   apiKey: '',
+  proxyUrl: '',
   modelMapping: '',
   customHeaders: '',
   models: '*',
@@ -644,6 +683,7 @@ function syncAddDraft() {
       customGroup: form.customGroup,
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
+      proxyUrl: form.proxyUrl,
       modelMapping: form.modelMapping,
       customHeaders: form.customHeaders,
       models: form.models,
@@ -660,6 +700,7 @@ function resetAddDraft() {
     customGroup: '',
     baseUrl: '',
     apiKey: '',
+    proxyUrl: '',
     modelMapping: '',
     customHeaders: '',
     models: '*',
@@ -677,6 +718,7 @@ function openAddModal() {
   form.customGroup = addDraftForm.customGroup || '';
   form.baseUrl = addDraftForm.baseUrl || '';
   form.apiKey = addDraftForm.apiKey || '';
+  form.proxyUrl = addDraftForm.proxyUrl || '';
   form.modelMapping = addDraftForm.modelMapping || '';
   form.customHeaders = addDraftForm.customHeaders || '';
   form.models = addDraftForm.models || '*';
@@ -702,6 +744,7 @@ function openEditModal(channel) {
 
   form.baseUrl = channel.baseUrl;
   form.apiKey = channel.apiKey;
+  form.proxyUrl = channel.proxyUrl || '';
   form.modelMapping = channel.modelMapping || '';
   form.customHeaders = channel.customHeaders || '';
   form.models = channel.models || '*';
@@ -733,6 +776,7 @@ async function cloneChannelDirectly(channel) {
       group: channel.group || 'all',
       baseUrl: channel.baseUrl,
       apiKey: channel.apiKey,
+      proxyUrl: channel.proxyUrl || '',
       modelMapping: channel.modelMapping || '',
       customHeaders: channel.customHeaders || '',
       models: channel.models || '*',
@@ -746,6 +790,55 @@ async function cloneChannelDirectly(channel) {
     emit('toast', `克隆渠道失败: ${err.message}`, 'error');
   } finally {
     cloningChannelId.value = null;
+  }
+}
+
+// 备份导出与导入还原逻辑
+const fileInputRef = ref(null);
+
+function exportChannelsConfig() {
+  const url = api.exportChannelsUrl();
+  window.open(url, '_blank');
+  emit('toast', '💾 正在下载全量渠道配置 JSON 备份文件...', 'info');
+}
+
+function triggerFileInput() {
+  if (fileInputRef.value) {
+    fileInputRef.value.click();
+  }
+}
+
+async function handleFileImport(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const channelList = Array.isArray(parsed) ? parsed : (parsed.data || parsed.channels || []);
+
+    if (!Array.isArray(channelList) || channelList.length === 0) {
+      emit('toast', '未能从 JSON 文件解析到有效渠道配置', 'error');
+      return;
+    }
+
+    const overwrite = confirm(
+      `检测到包含 ${channelList.length} 个渠道的备份配置。\n\n` +
+      `【确定】: 追加合并至现有渠道 (推荐)\n` +
+      `【取消】: 放弃本次导入`
+    );
+
+    if (!overwrite) {
+      return;
+    }
+
+    await api.importChannels(channelList, 'append');
+    emit('toast', `🎉 成功导入 ${channelList.length} 个渠道配置！`, 'success');
+    emit('refresh');
+  } catch (err) {
+    emit('toast', `导入失败: ${err.message}`, 'error');
+  } finally {
+    event.target.value = '';
   }
 }
 
@@ -772,6 +865,7 @@ async function testFormChannel() {
       group: finalGroup,
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
+      proxyUrl: form.proxyUrl,
       models: form.models,
       modelMapping: form.modelMapping,
       customHeaders: form.customHeaders
@@ -794,6 +888,7 @@ async function saveChannel() {
       group: finalGroup,
       baseUrl: form.baseUrl,
       apiKey: form.apiKey,
+      proxyUrl: form.proxyUrl,
       modelMapping: form.modelMapping,
       customHeaders: form.customHeaders,
       models: form.models,

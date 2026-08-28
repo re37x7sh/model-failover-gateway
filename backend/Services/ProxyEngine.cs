@@ -16,7 +16,10 @@ public class ProxyEngine : IProxyEngine
     private readonly ITokenStatsService _tokenStatsService;
     private readonly IAlertService _alertService;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IWebHostEnvironment _env;
     private readonly ILogger<ProxyEngine> _logger;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HttpClient> _proxyClients = new();
 
     // NOTE: 过滤传输层逐跳（Hop-by-hop）Header，避免协议冲突
     private static readonly HashSet<string> HopByHopHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -30,6 +33,7 @@ public class ProxyEngine : IProxyEngine
         ITokenStatsService tokenStatsService,
         IAlertService alertService,
         IHttpClientFactory httpClientFactory,
+        IWebHostEnvironment env,
         ILogger<ProxyEngine> logger)
     {
         _channelService = channelService;
@@ -37,7 +41,75 @@ public class ProxyEngine : IProxyEngine
         _tokenStatsService = tokenStatsService;
         _alertService = alertService;
         _httpClientFactory = httpClientFactory;
+        _env = env;
         _logger = logger;
+    }
+
+    private HttpClient GetProxyClient(string? proxyUrl)
+    {
+        if (string.IsNullOrWhiteSpace(proxyUrl))
+        {
+            return _httpClientFactory.CreateClient("ModelProxyClient");
+        }
+
+        return _proxyClients.GetOrAdd(proxyUrl.Trim(), url =>
+        {
+            var handler = new SocketsHttpHandler
+            {
+                Proxy = new System.Net.WebProxy(url),
+                UseProxy = true,
+                ConnectTimeout = TimeSpan.FromSeconds(15)
+            };
+            return new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        });
+    }
+
+    private bool IsGatewayAuthRequired(HttpContext context, out string error)
+    {
+        error = string.Empty;
+        try
+        {
+            var dataDir = Path.Combine(_env.ContentRootPath, "data");
+            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
+            if (File.Exists(settingsPath))
+            {
+                var json = File.ReadAllText(settingsPath);
+                var settings = JsonSerializer.Deserialize<GatewaySettings>(json);
+                if (settings != null && settings.RequireAuth && !string.IsNullOrWhiteSpace(settings.AuthToken))
+                {
+                    // 检查客户端请求头：Authorization: Bearer <Token> 或 x-api-key: <Token>
+                    var clientToken = "";
+                    if (context.Request.Headers.TryGetValue("Authorization", out var authHeader))
+                    {
+                        var str = authHeader.ToString().Trim();
+                        if (str.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            clientToken = str["Bearer ".Length..].Trim();
+                        }
+                        else
+                        {
+                            clientToken = str;
+                        }
+                    }
+                    else if (context.Request.Headers.TryGetValue("x-api-key", out var keyHeader))
+                    {
+                        clientToken = keyHeader.ToString().Trim();
+                    }
+
+                    if (!string.Equals(clientToken, settings.AuthToken.Trim(), StringComparison.Ordinal))
+                    {
+                        error = "网关已启用安全访问鉴权，请在客户端配置有效的 Gateway Token (Authorization: Bearer <Token> 或 x-api-key: <Token>)";
+                        return true;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // 忽略读取异常
+        }
+
+        return false;
     }
 
     public async Task ForwardRequestAsync(HttpContext context)
@@ -98,6 +170,25 @@ public class ProxyEngine : IProxyEngine
                 await context.Response.SendFileAsync(indexPath);
                 return;
             }
+        }
+
+        // 0. 校验网关安全访问鉴权 (如果开启了 RequireAuth)
+        if (IsGatewayAuthRequired(context, out var authError))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync($"{{\"error\": {{\"message\": \"{authError}\"}}}}");
+
+            _logService.AddLog(new ProxyLogEntry
+            {
+                ClientIp = clientIp,
+                RequestMethod = requestMethod,
+                RequestPath = rawPath,
+                StatusCode = 401,
+                DurationMs = stopwatch.ElapsedMilliseconds,
+                ErrorDetails = authError
+            });
+            return;
         }
 
         // 1. 读取并缓存客户端原始请求体字节（为了在失败重试时可以重复向不同渠道发送）
@@ -182,7 +273,6 @@ public class ProxyEngine : IProxyEngine
             return;
         }
 
-        var client = _httpClientFactory.CreateClient("ModelProxyClient");
         var triedChannels = new List<string>();
         var isFailoverOccurred = false;
         string? lastErrorDetails = null;
@@ -205,6 +295,7 @@ public class ProxyEngine : IProxyEngine
                 continue;
             }
 
+            var client = GetProxyClient(channel.ProxyUrl);
             var keys = channel.GetApiKeys();
             if (keys.Count == 0)
             {

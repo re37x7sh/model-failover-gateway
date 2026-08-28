@@ -194,12 +194,48 @@ public class ChannelService : IChannelService
             existing.Group = string.IsNullOrWhiteSpace(channel.Group) ? "all" : channel.Group.Trim();
             existing.ModelMapping = channel.ModelMapping?.Trim() ?? string.Empty;
             existing.CustomHeaders = channel.CustomHeaders?.Trim() ?? string.Empty;
+            existing.ProxyUrl = string.IsNullOrWhiteSpace(channel.ProxyUrl) ? null : channel.ProxyUrl.Trim();
             existing.Priority = channel.Priority;
             existing.IsEnabled = channel.IsEnabled;
             existing.UpdatedAt = DateTime.UtcNow;
 
             SaveToFileInternal();
             return existing;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task<List<Channel>> ImportChannelsAsync(List<Channel> importedChannels, string mode = "append")
+    {
+        await _semaphore.WaitAsync();
+        try
+        {
+            if (mode.Equals("overwrite", StringComparison.OrdinalIgnoreCase))
+            {
+                _cachedChannels.Clear();
+            }
+
+            var startPriority = (_cachedChannels.MaxBy(c => c.Priority)?.Priority ?? 0) + 1;
+            foreach (var ch in importedChannels)
+            {
+                if (string.IsNullOrWhiteSpace(ch.Name) || string.IsNullOrWhiteSpace(ch.BaseUrl)) continue;
+
+                ch.Id = Guid.NewGuid().ToString("N");
+                ch.Priority = startPriority++;
+                ch.CreatedAt = DateTime.UtcNow;
+                ch.UpdatedAt = DateTime.UtcNow;
+                ch.FailCount = 0;
+                ch.ConsecutiveFailures = 0;
+                ch.CircuitBreakerUntilUtc = null;
+                _cachedChannels.Add(ch);
+            }
+
+            SaveToFileInternal();
+            _logger.LogInformation("已成功导入 {Count} 个渠道配置 (模式: {Mode})", importedChannels.Count, mode);
+            return _cachedChannels.OrderBy(c => c.Priority).ToList();
         }
         finally
         {
@@ -274,9 +310,30 @@ public class ChannelService : IChannelService
         }
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HttpClient> _proxyTestClients = new();
+
+    private HttpClient GetTestClient(string? proxyUrl)
+    {
+        if (string.IsNullOrWhiteSpace(proxyUrl))
+        {
+            return _httpClientFactory.CreateClient("ModelTestClient");
+        }
+
+        return _proxyTestClients.GetOrAdd(proxyUrl.Trim(), url =>
+        {
+            var handler = new SocketsHttpHandler
+            {
+                Proxy = new System.Net.WebProxy(url),
+                UseProxy = true,
+                ConnectTimeout = TimeSpan.FromSeconds(10)
+            };
+            return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+        });
+    }
+
     public async Task<ChannelTestResult> TestChannelAsync(Channel channel)
     {
-        var client = _httpClientFactory.CreateClient("ModelTestClient");
+        var client = GetTestClient(channel.ProxyUrl);
         var stopwatch = Stopwatch.StartNew();
         var result = new ChannelTestResult();
 

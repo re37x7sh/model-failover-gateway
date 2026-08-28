@@ -15,6 +15,7 @@ public interface IChannelService
     Task<bool> ToggleAsync(string id, bool isEnabled);
     Task<bool> ReorderAsync(List<string> orderedIds);
     Task<ChannelTestResult> TestChannelAsync(Channel channel);
+    Task<List<Channel>> ImportChannelsAsync(List<Channel> importedChannels, string mode = "append");
     Task MarkFailureAsync(string channelId, string reason);
     Task MarkSuccessAsync(string channelId);
 }

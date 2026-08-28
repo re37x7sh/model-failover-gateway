@@ -48,6 +48,11 @@ public class Channel
     public string Group { get; set; } = "all";
 
     /// <summary>
+    /// 上游网络代理地址（可选，如：http://127.0.0.1:7890 或 socks5://127.0.0.1:10808）
+    /// </summary>
+    public string? ProxyUrl { get; set; }
+
+    /// <summary>
     /// 模型别名映射规则（每行一条：sourceModel => targetModel，例如：claude-3-7-sonnet => gpt-5.6-sol）
     /// </summary>
     public string ModelMapping { get; set; } = string.Empty;

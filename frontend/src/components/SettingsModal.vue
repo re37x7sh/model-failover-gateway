@@ -224,6 +224,43 @@
               💡 提示：当前运行端口为 <strong>{{ sysStatus.port }}</strong>。修改端口并保存后，请重启网关（退出托盘后重新运行）以生效新端口。
             </p>
           </div>
+
+          <!-- 网关全局安全与访问鉴权 -->
+          <div class="auth-config-section">
+            <h4 class="sub-section-title">🔒 网关安全与局域网调用鉴权</h4>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">启用网关请求访问鉴权</span>
+                <span class="setting-hint">开启后，所有发往网关的模型调用必须在 Header 中携带此 Gateway Token，防止局域网内其他人未授权盗刷。</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="gatewaySettings.requireAuth" />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div v-if="gatewaySettings.requireAuth" class="auth-token-form">
+              <label class="form-label">自定义网关访问令牌 (Gateway Token)</label>
+              <div class="token-input-row">
+                <input 
+                  v-model="gatewaySettings.authToken" 
+                  class="form-input font-mono flex-1" 
+                  placeholder="例如：sk-gateway-secret-key-12345" 
+                />
+                <button class="btn btn-secondary btn-sm" @click="generateRandomToken" type="button">🎲 随机生成</button>
+                <button class="btn btn-secondary btn-sm" @click="copyGatewayToken" :disabled="!gatewaySettings.authToken" type="button">📋 复制</button>
+              </div>
+              <p class="auth-tip">
+                💡 客户端调用配置方式：在 VSCode 或请求头中传入 <code>Authorization: Bearer {{ gatewaySettings.authToken || 'your-token' }}</code> 或 <code>x-api-key: {{ gatewaySettings.authToken || 'your-token' }}</code>。
+              </p>
+            </div>
+
+            <div class="auth-action-row">
+              <button class="btn btn-primary btn-sm" @click="saveAuthSettings" :disabled="savingAuth">
+                <span>{{ savingAuth ? '保存中...' : '💾 保存网关安全设置' }}</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- ==================== Tab 3: 桌面宠物与长任务提醒设置 ==================== -->
@@ -442,6 +479,12 @@ const sysStatus = reactive({
   continue: {}
 });
 
+const gatewaySettings = reactive({
+  requireAuth: false,
+  authToken: ''
+});
+const savingAuth = ref(false);
+
 const customPort = ref(5000);
 const codexProviderName = ref('gateway');
 const sysLogs = ref([]);
@@ -452,6 +495,53 @@ let refreshTimer = null;
 
 function closeModal() {
   emit('update:modelValue', false);
+}
+
+async function loadGatewaySettings() {
+  try {
+    const data = await api.getGatewaySettings();
+    if (data) {
+      gatewaySettings.requireAuth = !!data.requireAuth;
+      gatewaySettings.authToken = data.authToken || '';
+    }
+  } catch (err) {
+    console.error('获取网关鉴权配置失败:', err);
+  }
+}
+
+function generateRandomToken() {
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  gatewaySettings.authToken = `sk-gw-${rand}`;
+}
+
+async function copyGatewayToken() {
+  if (!gatewaySettings.authToken) return;
+  try {
+    await navigator.clipboard.writeText(gatewaySettings.authToken);
+    emit('toast', '网关鉴权 Token 已复制到剪贴板', 'success');
+  } catch {
+    emit('toast', '复制失败，请手动选择复制', 'error');
+  }
+}
+
+async function saveAuthSettings() {
+  if (gatewaySettings.requireAuth && !gatewaySettings.authToken.trim()) {
+    emit('toast', '启用鉴权保护时必须指定网关访问 Token', 'warning');
+    return;
+  }
+  savingAuth.value = true;
+  try {
+    await api.saveGatewaySettings({
+      requireAuth: gatewaySettings.requireAuth,
+      authToken: gatewaySettings.authToken.trim()
+    });
+    emit('toast', '🔒 网关安全鉴权配置已保存并即刻生效！', 'success');
+  } catch (err) {
+    emit('toast', `保存安全设置失败: ${err.message}`, 'error');
+  } finally {
+    savingAuth.value = false;
+  }
 }
 
 async function loadSystemStatus() {
@@ -573,6 +663,7 @@ watch(() => props.modelValue, (val) => {
   if (val) {
     loadSystemStatus();
     loadNotifSettings();
+    loadGatewaySettings();
     if (activeTab.value === 'syslogs') {
       fetchSysLogs();
       toggleAutoRefresh();
@@ -852,6 +943,53 @@ onUnmounted(() => {
   color: var(--text-dim);
   margin: 0;
   line-height: 1.5;
+}
+
+/* 网关安全鉴权设置区 */
+.auth-config-section {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-token-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.token-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-tip {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.auth-tip code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+}
+
+.auth-action-row {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Tab 2: 系统级日志面板 */

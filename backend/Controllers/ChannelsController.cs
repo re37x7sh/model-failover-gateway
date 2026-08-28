@@ -95,9 +95,38 @@ public class ChannelsController : ControllerBase
         var result = await _channelService.TestChannelAsync(channel);
         return Ok(ApiResponse<ChannelTestResult>.Ok(result));
     }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> Export()
+    {
+        var channels = await _channelService.GetAllAsync();
+        var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        var json = System.Text.Json.JsonSerializer.Serialize(channels, options);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var fileName = $"channels_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
+        return File(bytes, "application/json; charset=utf-8", fileName);
+    }
+
+    [HttpPost("import")]
+    public async Task<ActionResult<ApiResponse<List<Channel>>>> Import([FromBody] ImportChannelsRequest request)
+    {
+        if (request.Channels == null || request.Channels.Count == 0)
+        {
+            return BadRequest(ApiResponse<List<Channel>>.Fail("未提供任何有效渠道数据"));
+        }
+
+        var result = await _channelService.ImportChannelsAsync(request.Channels, request.Mode);
+        return Ok(ApiResponse<List<Channel>>.Ok(result, $"已成功导入 {request.Channels.Count} 个渠道"));
+    }
 }
 
 public class ToggleRequest
 {
     public bool IsEnabled { get; set; }
+}
+
+public class ImportChannelsRequest
+{
+    public List<Channel> Channels { get; set; } = new();
+    public string Mode { get; set; } = "append";
 }

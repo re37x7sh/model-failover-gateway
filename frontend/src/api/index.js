@@ -26,6 +26,8 @@ export const api = {
   toggleChannel: (id, isEnabled) => request(`/channels/${id}/toggle`, { method: 'POST', body: JSON.stringify({ isEnabled }) }),
   reorderChannels: (orderedIds) => request('/channels/reorder', { method: 'POST', body: JSON.stringify(orderedIds) }),
   testChannel: (data) => request('/channels/test', { method: 'POST', body: JSON.stringify(data) }),
+  exportChannelsUrl: () => `${API_BASE}/channels/export`,
+  importChannels: (channels, mode = 'append') => request('/channels/import', { method: 'POST', body: JSON.stringify({ channels, mode }) }),
 
   // 请求业务日志与概览
   getLogs: (limit = 100) => request(`/logs?limit=${limit}`),
@@ -38,6 +40,8 @@ export const api = {
 
   // 系统配置与一键接管
   getSystemStatus: () => request('/system/status'),
+  getGatewaySettings: () => request('/system/gateway-settings'),
+  saveGatewaySettings: (data) => request('/system/gateway-settings', { method: 'POST', body: JSON.stringify(data) }),
   injectConfig: (target = 'all', port = 0, group = 'claude', providerName = 'gateway') => 
     request('/system/inject', { method: 'POST', body: JSON.stringify({ target, port, group, providerName }) }),
   restoreConfig: (target = 'all') => 

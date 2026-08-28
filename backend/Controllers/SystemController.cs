@@ -14,15 +14,56 @@ public class SystemController : ControllerBase
     private readonly IConfigInjectionService _configService;
     private readonly ISystemLogService _systemLogService;
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _env;
 
     public SystemController(
         IConfigInjectionService configService,
         ISystemLogService systemLogService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IWebHostEnvironment env)
     {
         _configService = configService;
         _systemLogService = systemLogService;
         _configuration = configuration;
+        _env = env;
+    }
+
+    [HttpGet("gateway-settings")]
+    public ActionResult<ApiResponse<GatewaySettings>> GetGatewaySettings()
+    {
+        try
+        {
+            var dataDir = Path.Combine(_env.ContentRootPath, "data");
+            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
+            if (System.IO.File.Exists(settingsPath))
+            {
+                var json = System.IO.File.ReadAllText(settingsPath);
+                var settings = System.Text.Json.JsonSerializer.Deserialize<GatewaySettings>(json);
+                if (settings != null) return Ok(ApiResponse<GatewaySettings>.Ok(settings));
+            }
+        }
+        catch { }
+
+        return Ok(ApiResponse<GatewaySettings>.Ok(new GatewaySettings()));
+    }
+
+    [HttpPost("gateway-settings")]
+    public ActionResult<ApiResponse<bool>> SaveGatewaySettings([FromBody] GatewaySettings settings)
+    {
+        try
+        {
+            var dataDir = Path.Combine(_env.ContentRootPath, "data");
+            if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
+            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
+            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            var json = System.Text.Json.JsonSerializer.Serialize(settings, options);
+            System.IO.File.WriteAllText(settingsPath, json);
+            return Ok(ApiResponse<bool>.Ok(true, "网关安全鉴权配置已保存并即刻生效"));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<bool>.Fail($"保存失败: {ex.Message}"));
+        }
     }
 
     [HttpGet("status")]
