@@ -14,24 +14,31 @@ public class TokenUsageRecord
     public string? Model { get; set; }
     public long PromptTokens { get; set; }
     public long CompletionTokens { get; set; }
-    public long TotalTokens => PromptTokens + CompletionTokens;
+    public long CacheReadTokens { get; set; }
+    public long CacheCreationTokens { get; set; }
+    public long TotalTokens => PromptTokens + CompletionTokens + CacheReadTokens + CacheCreationTokens;
     public bool IsStream { get; set; }
 }
 
 /// <summary>
-/// Token 全局汇总统计 DTO（包含真实费用折算）
+/// Token 全局汇总统计 DTO（包含真实费用折算与 Prompt Caching 节约统计）
 /// </summary>
 public class TokenStatsSummaryDto
 {
     public long TotalTokens { get; set; }
     public long PromptTokens { get; set; }
     public long CompletionTokens { get; set; }
+    public long TotalCacheReadTokens { get; set; }
+    public long TotalCacheCreationTokens { get; set; }
     public long TodayTokens { get; set; }
     public long TotalRequests { get; set; }
     public double TotalCostUsd { get; set; }
     public double TotalCostCny { get; set; }
     public double TodayCostUsd { get; set; }
     public double TodayCostCny { get; set; }
+    public double TotalSavedCostUsd { get; set; }
+    public double TotalSavedCostCny { get; set; }
+    public double CacheHitRate { get; set; }
 }
 
 /// <summary>

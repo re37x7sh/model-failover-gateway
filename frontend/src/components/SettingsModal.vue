@@ -255,9 +255,22 @@
               </p>
             </div>
 
+            <!-- 负载均衡与调度策略 -->
+            <div class="setting-row" style="margin-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); padding-top: 12px;">
+              <div class="setting-info">
+                <span class="setting-name">⚖️ 渠道负载均衡与调度策略</span>
+                <span class="setting-hint">选择多渠道/多Key并发调用时的分流策略，均衡分散各上游服务商的并发与频次限额。</span>
+              </div>
+              <select v-model="gatewaySettings.loadBalancingStrategy" class="form-input select-input" style="width: 200px; background: rgba(0,0,0,0.3); color: var(--text-main);">
+                <option value="priority">🎯 优先级顺序 (主备模式)</option>
+                <option value="round_robin">🔄 轮询分流 (Round Robin)</option>
+                <option value="random">🎲 随机分流 (Random)</option>
+              </select>
+            </div>
+
             <div class="auth-action-row">
               <button class="btn btn-primary btn-sm" @click="saveAuthSettings" :disabled="savingAuth">
-                <span>{{ savingAuth ? '保存中...' : '💾 保存网关安全设置' }}</span>
+                <span>{{ savingAuth ? '保存中...' : '💾 保存网关全局设置' }}</span>
               </button>
             </div>
           </div>
@@ -481,7 +494,8 @@ const sysStatus = reactive({
 
 const gatewaySettings = reactive({
   requireAuth: false,
-  authToken: ''
+  authToken: '',
+  loadBalancingStrategy: 'priority'
 });
 const savingAuth = ref(false);
 
@@ -503,6 +517,7 @@ async function loadGatewaySettings() {
     if (data) {
       gatewaySettings.requireAuth = !!data.requireAuth;
       gatewaySettings.authToken = data.authToken || '';
+      gatewaySettings.loadBalancingStrategy = data.loadBalancingStrategy || 'priority';
     }
   } catch (err) {
     console.error('获取网关鉴权配置失败:', err);
@@ -534,11 +549,12 @@ async function saveAuthSettings() {
   try {
     await api.saveGatewaySettings({
       requireAuth: gatewaySettings.requireAuth,
-      authToken: gatewaySettings.authToken.trim()
+      authToken: gatewaySettings.authToken.trim(),
+      loadBalancingStrategy: gatewaySettings.loadBalancingStrategy || 'priority'
     });
-    emit('toast', '🔒 网关安全鉴权配置已保存并即刻生效！', 'success');
+    emit('toast', '🔒 网关全局安全与分流调度配置已保存！', 'success');
   } catch (err) {
-    emit('toast', `保存安全设置失败: ${err.message}`, 'error');
+    emit('toast', `保存全局设置失败: ${err.message}`, 'error');
   } finally {
     savingAuth.value = false;
   }

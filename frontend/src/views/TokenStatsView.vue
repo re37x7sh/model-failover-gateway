@@ -47,8 +47,17 @@
         </div>
       </div>
 
+      <div class="kpi-card cache-card">
+        <div class="kpi-icon-box cache-icon">⚡</div>
+        <div class="kpi-content">
+          <div class="kpi-label">Prompt Cache 缓存节约</div>
+          <div class="kpi-value font-mono text-warning">¥{{ formatCurrency(summary.totalSavedCostCny || 0) }}</div>
+          <div class="kpi-subtext">命中率 {{ summary.cacheHitRate || 0 }}% (省 ${{ formatCurrency(summary.totalSavedCostUsd || 0) }})</div>
+        </div>
+      </div>
+
       <div class="kpi-card">
-        <div class="kpi-icon-box req-icon">⚡</div>
+        <div class="kpi-icon-box req-icon">📈</div>
         <div class="kpi-content">
           <div class="kpi-label">统计记录请求数</div>
           <div class="kpi-value font-mono">{{ formatNumber(summary.totalRequests) }}</div>
@@ -357,12 +366,17 @@ const summary = ref({
   totalTokens: 0,
   promptTokens: 0,
   completionTokens: 0,
+  totalCacheReadTokens: 0,
+  totalCacheCreationTokens: 0,
   todayTokens: 0,
   totalRequests: 0,
   totalCostUsd: 0,
   totalCostCny: 0,
   todayCostUsd: 0,
-  todayCostCny: 0
+  todayCostCny: 0,
+  totalSavedCostUsd: 0,
+  totalSavedCostCny: 0,
+  cacheHitRate: 0
 });
 
 const channelStats = ref([]);

@@ -14,4 +14,9 @@ public class GatewaySettings
     /// 网关自定义访问令牌（Gateway Token）
     /// </summary>
     public string AuthToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 渠道负载均衡与调度策略（priority 优先级主备、round_robin 轮询分流、random 随机分流）
+    /// </summary>
+    public string LoadBalancingStrategy { get; set; } = "priority";
 }

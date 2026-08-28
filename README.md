@@ -146,6 +146,25 @@
 - **灵活鉴权方式**：支持通过 `Authorization: Bearer <GatewayToken>` 或 `x-api-key: <GatewayToken>` 进行校验；
 - **一键随机生成与复制**：支持在 UI 中一键生成高强度安全 Token 并一键复制到剪贴板。
 
+### 16. 🧪 内置 Web 对话与调试沙箱 (Playground & Live Inspector)
+- **零配置在线对话**：控制台顶部导航新增「🧪 调试沙箱」，无需打开 VSCode 即可直接与大模型对话，支持 SSE 打字机流式输出与快捷提问模板；
+- **🔍 实时调用诊断面板**：右侧抽屉实时透视：
+  - **命中渠道与 Key**：直观展示当前会话究竟跑在哪个渠道与第几个备用 Key；
+  - **模型别名重写映射**：透视客户端模型是否被重写为中转站目标模型；
+  - **响应耗时与 HTTP 状态码**：毫秒级响应耗时与状态指示；
+  - **Token 构成与请求负载 JSON**：实时展开客户端原始 Request Payload，排查兼容性一目了然。
+
+### 17. ⚖️ 多重负载均衡与分流策略 (Load Balancing Strategies)
+- **多样化调度算法**：支持在设置中心随时切换渠道并发调度模式：
+  - **🎯 优先级顺序 (Priority - 默认)**：严格按优先级升序逐级尝试，主力优先、自动兜底（经典主备模式）；
+  - **🔄 轮询分流 (Round Robin)**：同组/多渠道之间按请求轮流均摊流量，平衡并发负载与服务商频率配额；
+  - **🎲 随机分流 (Random)**：在可用渠道池中随机分散请求。
+
+### 18. ⚡ Claude Prompt Caching 提示词缓存节约深度分析 (Prompt Cache Analytics)
+- **精准识别缓存 Tokens**：流式解析 Anthropic `cache_read_input_tokens` 与 `cache_creation_input_tokens`；
+- **真实节约金额换算**：按官方 90% 缓存折扣模型，精准折算为用户省下的 **¥ 人民币** 与 **$ 美元**；
+- **命中率看板透视**：在 Token 统计页直观展示「⚡ Prompt Cache 缓存节约」与「缓存命中率 %」指标卡片。
+
 ---
 
 ## 📂 辅助工具脚本 (`scripts/` 目录)

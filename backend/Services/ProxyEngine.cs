@@ -112,6 +112,40 @@ public class ProxyEngine : IProxyEngine
         return false;
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _roundRobinIndices = new();
+
+    private List<Channel> ApplyLoadBalancingStrategy(List<Channel> channels, string group)
+    {
+        if (channels.Count <= 1) return channels;
+
+        try
+        {
+            var dataDir = Path.Combine(_env.ContentRootPath, "data");
+            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
+            if (File.Exists(settingsPath))
+            {
+                var json = File.ReadAllText(settingsPath);
+                var settings = JsonSerializer.Deserialize<GatewaySettings>(json);
+                if (settings != null)
+                {
+                    var strategy = (settings.LoadBalancingStrategy ?? "priority").ToLowerInvariant();
+                    if (strategy == "round_robin")
+                    {
+                        var idx = _roundRobinIndices.AddOrUpdate(group, 0, (_, v) => (v + 1) % channels.Count);
+                        return channels.Skip(idx).Concat(channels.Take(idx)).ToList();
+                    }
+                    if (strategy == "random")
+                    {
+                        return channels.OrderBy(_ => Random.Shared.Next()).ToList();
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return channels; // 默认 priority 模式 (已按 Priority 升序排序)
+    }
+
     public async Task ForwardRequestAsync(HttpContext context)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -250,6 +284,9 @@ public class ProxyEngine : IProxyEngine
                 activeChannels = matchedChannels;
             }
         }
+
+        // 应用全局负载均衡分流策略（轮询 / 随机 / 优先级）
+        activeChannels = ApplyLoadBalancingStrategy(activeChannels, requestedGroup);
 
         if (!activeChannels.Any())
         {
@@ -639,7 +676,7 @@ public class ProxyEngine : IProxyEngine
         try
         {
             var sampleText = responseSampleBuilder.ToString();
-            var (promptTokens, completionTokens) = ExtractTokens(sampleText, requestBodyBytes.Length, totalBytesTransferred);
+            var (promptTokens, completionTokens, cacheReadTokens, cacheCreationTokens) = ExtractTokens(sampleText, requestBodyBytes.Length, totalBytesTransferred);
 
             _tokenStatsService.RecordUsage(
                 channelId,
@@ -649,7 +686,9 @@ public class ProxyEngine : IProxyEngine
                 model,
                 promptTokens,
                 completionTokens,
-                isStream: true);
+                isStream: true,
+                cacheReadTokens: cacheReadTokens,
+                cacheCreationTokens: cacheCreationTokens);
 
             var (isToolCall, stopReason) = ExtractStopReason(sampleText);
 
@@ -658,7 +697,7 @@ public class ProxyEngine : IProxyEngine
                 model ?? "AI Model", 
                 channelName, 
                 stopwatch.ElapsedMilliseconds, 
-                promptTokens + completionTokens,
+                promptTokens + completionTokens + cacheReadTokens,
                 isToolCall,
                 stopReason);
         }
@@ -717,10 +756,12 @@ public class ProxyEngine : IProxyEngine
         return (false, "");
     }
 
-    private static (long promptTokens, long completionTokens) ExtractTokens(string responseText, int requestBodyLength, long responseLength)
+    private static (long promptTokens, long completionTokens, long cacheReadTokens, long cacheCreationTokens) ExtractTokens(string responseText, int requestBodyLength, long responseLength)
     {
         long prompt = 0;
         long completion = 0;
+        long cacheRead = 0;
+        long cacheCreation = 0;
 
         try
         {
@@ -740,6 +781,24 @@ public class ProxyEngine : IProxyEngine
                 if (long.TryParse(m.Groups[1].Value, out var val) && val > completion)
                 {
                     completion = val;
+                }
+            }
+
+            var cacheReadMatches = System.Text.RegularExpressions.Regex.Matches(responseText, @"""cache_read_input_tokens""\s*:\s*(\d+)");
+            foreach (System.Text.RegularExpressions.Match m in cacheReadMatches)
+            {
+                if (long.TryParse(m.Groups[1].Value, out var val) && val > cacheRead)
+                {
+                    cacheRead = val;
+                }
+            }
+
+            var cacheCreateMatches = System.Text.RegularExpressions.Regex.Matches(responseText, @"""cache_creation_input_tokens""\s*:\s*(\d+)");
+            foreach (System.Text.RegularExpressions.Match m in cacheCreateMatches)
+            {
+                if (long.TryParse(m.Groups[1].Value, out var val) && val > cacheCreation)
+                {
+                    cacheCreation = val;
                 }
             }
 
@@ -767,11 +826,23 @@ public class ProxyEngine : IProxyEngine
                     }
                 }
             }
+
+            if (cacheRead == 0)
+            {
+                var cachedMatches = System.Text.RegularExpressions.Regex.Matches(responseText, @"""cached_tokens""\s*:\s*(\d+)");
+                foreach (System.Text.RegularExpressions.Match m in cachedMatches)
+                {
+                    if (long.TryParse(m.Groups[1].Value, out var val) && val > cacheRead)
+                    {
+                        cacheRead = val;
+                    }
+                }
+            }
         }
         catch { }
 
         // 3. 服务端未返回 usage 时的估算保底（1 token ≈ 4 字节）
-        if (prompt <= 0 && requestBodyLength > 0)
+        if (prompt <= 0 && requestBodyLength > 0 && cacheRead <= 0)
         {
             prompt = Math.Max(1, requestBodyLength / 4);
         }
@@ -780,7 +851,7 @@ public class ProxyEngine : IProxyEngine
             completion = Math.Max(1, responseLength / 4);
         }
 
-        return (prompt, completion);
+        return (prompt, completion, cacheRead, cacheCreation);
     }
 
     private static async Task WriteFullResponseAsync(HttpContext context, HttpResponseMessage upstreamResponse, byte[] content)

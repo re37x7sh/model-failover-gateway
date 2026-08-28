@@ -68,6 +68,9 @@
             <button class="btn btn-primary" @click="$emit('navigate', 'channels')">
               <span>⚡ 管理渠道与优先级</span>
             </button>
+            <button class="btn btn-secondary" @click="$emit('navigate', 'playground')">
+              <span>🧪 打开调试沙箱</span>
+            </button>
             <button class="btn btn-secondary" @click="$emit('navigate', 'guide')">
               <span>🚀 查看插件接入指引</span>
             </button>

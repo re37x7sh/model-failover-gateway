@@ -7,7 +7,7 @@ namespace ModelFailoverGateway.Services;
 
 public interface ITokenStatsService
 {
-    void RecordUsage(string channelId, string channelName, string group, string rawApiKey, string? model, long promptTokens, long completionTokens, bool isStream);
+    void RecordUsage(string channelId, string channelName, string group, string rawApiKey, string? model, long promptTokens, long completionTokens, bool isStream, long cacheReadTokens = 0, long cacheCreationTokens = 0);
     TokenStatsSummaryDto GetSummary();
     List<ChannelTokenStatsDto> GetChannelStats();
     List<KeyTokenStatsDto> GetKeyStats(string? channelId = null);
@@ -66,9 +66,11 @@ public class TokenStatsService : ITokenStatsService, IDisposable
         string? model,
         long promptTokens,
         long completionTokens,
-        bool isStream)
+        bool isStream,
+        long cacheReadTokens = 0,
+        long cacheCreationTokens = 0)
     {
-        if (promptTokens <= 0 && completionTokens <= 0)
+        if (promptTokens <= 0 && completionTokens <= 0 && cacheReadTokens <= 0)
         {
             // 如果未能从响应中解析出有效 token 数，估算保底值
             promptTokens = 1;
@@ -85,6 +87,8 @@ public class TokenStatsService : ITokenStatsService, IDisposable
             Model = model,
             PromptTokens = promptTokens,
             CompletionTokens = completionTokens,
+            CacheReadTokens = cacheReadTokens,
+            CacheCreationTokens = cacheCreationTokens,
             IsStream = isStream,
             Timestamp = DateTime.UtcNow
         };
@@ -100,8 +104,8 @@ public class TokenStatsService : ITokenStatsService, IDisposable
             _isDirty = true;
         }
 
-        _logger.LogInformation("已记录 Token 消耗: 渠道 [{Channel}] Key [{Key}] 模型 [{Model}] -> Prompt: {Prompt}, Completion: {Completion}, Total: {Total}",
-            channelName, maskedKey, model ?? "*", promptTokens, completionTokens, promptTokens + completionTokens);
+        _logger.LogInformation("已记录 Token 消耗: 渠道 [{Channel}] Key [{Key}] 模型 [{Model}] -> Prompt: {Prompt}, Completion: {Completion}, CacheRead: {CacheRead}, Total: {Total}",
+            channelName, maskedKey, model ?? "*", promptTokens, completionTokens, cacheReadTokens, record.TotalTokens);
     }
 
     public TokenStatsSummaryDto GetSummary()
@@ -113,24 +117,38 @@ public class TokenStatsService : ITokenStatsService, IDisposable
 
             var totalPrompt = _records.Sum(r => r.PromptTokens);
             var totalCompletion = _records.Sum(r => r.CompletionTokens);
+            var totalCacheRead = _records.Sum(r => r.CacheReadTokens);
+            var totalCacheCreation = _records.Sum(r => r.CacheCreationTokens);
             
             var todayRecords = _records.Where(r => r.Timestamp >= todayUtc).ToList();
             var todayTotal = todayRecords.Sum(r => r.TotalTokens);
 
             var (totalUsd, totalCny) = CalculateTotalCost(_records);
             var (todayUsd, todayCny) = CalculateTotalCost(todayRecords);
+            var (savedUsd, savedCny) = CalculateSavings(_records);
+
+            double cacheHitRate = 0;
+            if (totalPrompt + totalCacheRead > 0)
+            {
+                cacheHitRate = Math.Round((double)totalCacheRead / (totalPrompt + totalCacheRead) * 100.0, 1);
+            }
 
             return new TokenStatsSummaryDto
             {
-                TotalTokens = totalPrompt + totalCompletion,
+                TotalTokens = totalPrompt + totalCompletion + totalCacheRead + totalCacheCreation,
                 PromptTokens = totalPrompt,
                 CompletionTokens = totalCompletion,
+                TotalCacheReadTokens = totalCacheRead,
+                TotalCacheCreationTokens = totalCacheCreation,
                 TodayTokens = todayTotal,
                 TotalRequests = _records.Count,
                 TotalCostUsd = totalUsd,
                 TotalCostCny = totalCny,
                 TodayCostUsd = todayUsd,
-                TodayCostCny = todayCny
+                TodayCostCny = todayCny,
+                TotalSavedCostUsd = savedUsd,
+                TotalSavedCostCny = savedCny,
+                CacheHitRate = cacheHitRate
             };
         }
     }
@@ -392,6 +410,32 @@ public class TokenStatsService : ITokenStatsService, IDisposable
         }
 
         return (Math.Round(totalUsd, 4), Math.Round(totalCny, 4));
+    }
+
+    private static (double savedUsd, double savedCny) CalculateSavings(IEnumerable<TokenUsageRecord> records)
+    {
+        double totalSavedUsd = 0;
+        foreach (var r in records)
+        {
+            if (r.CacheReadTokens <= 0) continue;
+            var m = (r.Model ?? "").ToLowerInvariant();
+            double promptRate = 3.00;
+            if (m.Contains("haiku")) promptRate = 0.80;
+            else if (m.Contains("opus")) promptRate = 15.00;
+            else if (m.Contains("4o-mini")) promptRate = 0.15;
+            else if (m.Contains("4o")) promptRate = 2.50;
+            else if (m.Contains("gpt-5") || m.Contains("o1") || m.Contains("o3")) promptRate = 5.00;
+            else if (m.Contains("deepseek-r1")) promptRate = 0.55;
+            else if (m.Contains("deepseek")) promptRate = 0.14;
+            else if (m.Contains("gpt-4")) promptRate = 10.00;
+
+            // Prompt Caching 命中读取节省 90% 的输入成本
+            var savedUsd = (r.CacheReadTokens * promptRate * 0.90) / 1_000_000.0;
+            totalSavedUsd += savedUsd;
+        }
+
+        var totalSavedCny = totalSavedUsd * UsdToCnyRate;
+        return (Math.Round(totalSavedUsd, 4), Math.Round(totalSavedCny, 4));
     }
 
     public void ClearStats()

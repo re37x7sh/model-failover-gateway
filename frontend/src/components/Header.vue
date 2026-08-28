@@ -129,6 +129,7 @@ defineEmits(['update:currentTab', 'openSettings', 'dismissAlert', 'clearAlerts']
 const tabs = computed(() => [
   { id: 'dashboard', label: t.value.nav.dashboard, icon: '📊' },
   { id: 'channels', label: t.value.nav.channels, icon: '⚡' },
+  { id: 'playground', label: t.value.nav.playground, icon: '🧪' },
   { id: 'tokens', label: t.value.nav.tokens, icon: '💎' },
   { id: 'logs', label: t.value.nav.logs, icon: '📜' },
   { id: 'guide', label: t.value.nav.guide, icon: '🚀' }

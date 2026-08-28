@@ -52,6 +52,11 @@
           @toast="showToast"
         />
 
+        <PlaygroundView 
+          v-else-if="currentTab === 'playground'" 
+          @toast="showToast"
+        />
+
         <TokenStatsView 
           v-else-if="currentTab === 'tokens'" 
           @toast="showToast"
@@ -94,9 +99,10 @@ import SettingsModal from './components/SettingsModal.vue';
 import DesktopPet from './components/DesktopPet.vue';
 import DashboardView from './views/DashboardView.vue';
 import ChannelsView from './views/ChannelsView.vue';
+import PlaygroundView from './views/PlaygroundView.vue';
 import TokenStatsView from './views/TokenStatsView.vue';
-import LogsView from './views/LogsView.vue';
 import GuideView from './views/GuideView.vue';
+import LogsView from './views/LogsView.vue';
 import { api } from './api';
 
 const isPetStandalone = ref(
