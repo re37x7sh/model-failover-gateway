@@ -103,7 +103,8 @@
                 <span class="role-name">{{ msg.role === 'user' ? '用户 (You)' : (msg.model || model) }}</span>
                 <span class="msg-time">{{ msg.time }}</span>
               </div>
-              <div class="bubble-content font-mono">{{ msg.content }}</div>
+              <div v-if="msg.role === 'user'" class="bubble-content user-bubble-content font-mono">{{ msg.content }}</div>
+              <div v-else class="bubble-content markdown-body" v-html="renderMarkdown(msg.content)"></div>
               <div v-if="msg.role === 'assistant' && msg.isGenerating" class="generating-cursor">▍</div>
             </div>
           </div>
@@ -223,6 +224,22 @@
 
 <script setup>
 import { ref, reactive, nextTick } from 'vue';
+import { marked } from 'marked';
+
+// 配置 marked 解析器
+marked.setOptions({
+  gfm: true,
+  breaks: true
+});
+
+function renderMarkdown(content) {
+  if (!content) return '';
+  try {
+    return marked.parse(content);
+  } catch {
+    return content;
+  }
+}
 
 const emit = defineEmits(['toast']);
 
@@ -653,10 +670,147 @@ async function sendMessage() {
 }
 
 .bubble-content {
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
+  font-size: 13.5px;
+  line-height: 1.65;
   word-break: break-word;
+}
+
+.user-bubble-content {
+  white-space: pre-wrap;
+}
+
+/* Markdown 渲染富文本格式美化 */
+.markdown-body {
+  color: var(--text-main);
+}
+
+.markdown-body :deep(p) {
+  margin: 0 0 10px;
+}
+
+.markdown-body :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4) {
+  color: #fff;
+  font-weight: 700;
+  margin: 14px 0 6px;
+  line-height: 1.35;
+}
+
+.markdown-body :deep(h1) {
+  font-size: 17px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
+}
+
+.markdown-body :deep(h2) {
+  font-size: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+}
+
+.markdown-body :deep(h3) {
+  font-size: 14px;
+}
+
+.markdown-body :deep(h4) {
+  font-size: 13px;
+}
+
+.markdown-body :deep(strong),
+.markdown-body :deep(b) {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.markdown-body :deep(em),
+.markdown-body :deep(i) {
+  color: #c084fc;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  padding-left: 22px;
+  margin: 6px 0 10px;
+}
+
+.markdown-body :deep(li) {
+  margin: 4px 0;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid var(--accent-primary);
+  background: rgba(147, 51, 234, 0.08);
+  margin: 10px 0;
+  padding: 8px 14px;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
+}
+
+.markdown-body :deep(blockquote p) {
+  margin: 0;
+}
+
+.markdown-body :deep(code) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a5b4fc;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.markdown-body :deep(pre) {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+}
+
+.markdown-body :deep(pre code) {
+  background: transparent;
+  padding: 0;
+  color: #e2e8f0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 12.5px;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid var(--border-subtle);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.markdown-body :deep(th) {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  color: #fff;
+}
+
+.markdown-body :deep(a) {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+.markdown-body :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 14px 0;
 }
 
 .generating-cursor {
