@@ -27,6 +27,17 @@ public class LogsController : ControllerBase
         return Ok(ApiResponse<List<ProxyLogEntry>>.Ok(logs));
     }
 
+    [HttpGet("paged")]
+    public ActionResult<ApiResponse<PagedResult<ProxyLogEntry>>> GetPagedLogs(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? filter = null,
+        [FromQuery] string? keyword = null)
+    {
+        var result = _logService.GetPagedLogs(page, pageSize, filter, keyword);
+        return Ok(ApiResponse<PagedResult<ProxyLogEntry>>.Ok(result));
+    }
+
     [HttpDelete]
     public ActionResult<ApiResponse<bool>> ClearLogs()
     {

@@ -11,9 +11,10 @@ public interface ITokenStatsService
     List<ChannelTokenStatsDto> GetChannelStats();
     List<KeyTokenStatsDto> GetKeyStats(string? channelId = null);
     void ClearStats();
+    void Flush();
 }
 
-public class TokenStatsService : ITokenStatsService
+public class TokenStatsService : ITokenStatsService, IDisposable
 {
     private readonly ILogger<TokenStatsService> _logger;
     private readonly IWebHostEnvironment _env;
@@ -36,6 +37,9 @@ public class TokenStatsService : ITokenStatsService
         _storagePath = Path.Combine(dataDir, "token_usage.json");
 
         LoadRecords();
+
+        // 注册进程退出事件，确保优雅停机时立即落盘
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Flush();
 
         // 定期检查并将脏数据批量落盘（每 3 秒检查一次）
         _saveTimer = new System.Threading.Timer(_ =>
@@ -189,21 +193,94 @@ public class TokenStatsService : ITokenStatsService
         SaveRecords();
     }
 
+    public void Flush()
+    {
+        lock (_lock)
+        {
+            if (_isDirty)
+            {
+                SaveRecordsUnderLock();
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        Flush();
+        _saveTimer.Dispose();
+    }
+
     private void LoadRecords()
     {
         try
         {
+            var loadedRecords = new List<TokenUsageRecord>();
+
+            // 1. 读取主存储文件
             if (File.Exists(_storagePath))
             {
                 var json = File.ReadAllText(_storagePath);
                 var items = JsonSerializer.Deserialize<List<TokenUsageRecord>>(json);
                 if (items != null)
                 {
-                    lock (_lock)
+                    loadedRecords.AddRange(items);
+                }
+            }
+
+            // 2. 智能合并潜在分散在 bin/Debug 或其他路径的历史孤立文件（避免因启动目录不同导致数据丢失）
+            var candidatePaths = new List<string>
+            {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "token_usage.json"),
+                Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "data", "token_usage.json")),
+                Path.Combine(Directory.GetCurrentDirectory(), "data", "token_usage.json")
+            };
+
+            var mergedCount = 0;
+            var seenKeys = new HashSet<string>(
+                loadedRecords.Select(r => $"{r.ChannelId}_{r.MaskedKey}_{r.Timestamp.Ticks}_{r.PromptTokens}_{r.CompletionTokens}")
+            );
+
+            foreach (var candidate in candidatePaths.Distinct())
+            {
+                if (File.Exists(candidate) && !string.Equals(Path.GetFullPath(candidate), Path.GetFullPath(_storagePath), StringComparison.OrdinalIgnoreCase))
+                {
+                    try
                     {
-                        _records.Clear();
-                        _records.AddRange(items);
+                        var json = File.ReadAllText(candidate);
+                        var extraItems = JsonSerializer.Deserialize<List<TokenUsageRecord>>(json);
+                        if (extraItems != null)
+                        {
+                            foreach (var item in extraItems)
+                            {
+                                var key = $"{item.ChannelId}_{item.MaskedKey}_{item.Timestamp.Ticks}_{item.PromptTokens}_{item.CompletionTokens}";
+                                if (seenKeys.Add(key))
+                                {
+                                    loadedRecords.Add(item);
+                                    mergedCount++;
+                                }
+                            }
+                        }
                     }
+                    catch
+                    {
+                        // 忽略单个文件的读取错误
+                    }
+                }
+            }
+
+            lock (_lock)
+            {
+                _records.Clear();
+                _records.AddRange(loadedRecords.OrderBy(r => r.Timestamp));
+                if (_records.Count > 20000)
+                {
+                    _records.RemoveRange(0, _records.Count - 20000);
+                }
+
+                if (mergedCount > 0)
+                {
+                    _logger.LogInformation("🎉 历史数据自愈完成：已成功从历史孤立目录合并并恢复 {Count} 条 Token 消耗记录！", mergedCount);
+                    SaveRecordsUnderLock();
                 }
             }
         }
@@ -215,15 +292,19 @@ public class TokenStatsService : ITokenStatsService
 
     private void SaveRecords()
     {
+        lock (_lock)
+        {
+            SaveRecordsUnderLock();
+        }
+    }
+
+    private void SaveRecordsUnderLock()
+    {
         try
         {
-            string json;
-            lock (_lock)
-            {
-                _isDirty = false;
-                var options = new JsonSerializerOptions { WriteIndented = false };
-                json = JsonSerializer.Serialize(_records, options);
-            }
+            _isDirty = false;
+            var options = new JsonSerializerOptions { WriteIndented = false };
+            var json = JsonSerializer.Serialize(_records, options);
             File.WriteAllText(_storagePath, json);
         }
         catch (Exception ex)

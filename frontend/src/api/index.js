@@ -29,6 +29,8 @@ export const api = {
 
   // 请求业务日志与概览
   getLogs: (limit = 100) => request(`/logs?limit=${limit}`),
+  getPagedLogs: (page = 1, pageSize = 50, filter = 'all', keyword = '') => 
+    request(`/logs/paged?page=${page}&pageSize=${pageSize}&filter=${encodeURIComponent(filter)}&keyword=${encodeURIComponent(keyword)}`),
   clearLogs: () => request('/logs', { method: 'DELETE' }),
   getSummary: () => request('/logs/summary'),
   getLogSettings: () => request('/logs/settings'),

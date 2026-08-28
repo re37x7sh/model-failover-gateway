@@ -44,18 +44,39 @@ public class ChannelService : IChannelService
 
     private void LoadInitialData()
     {
-        if (File.Exists(_storagePath))
+        var candidatePaths = new List<string>
         {
-            try
+            _storagePath,
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "channels.json"),
+            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "data", "channels.json")),
+            Path.Combine(Directory.GetCurrentDirectory(), "data", "channels.json")
+        };
+
+        foreach (var path in candidatePaths.Distinct())
+        {
+            if (File.Exists(path))
             {
-                var json = File.ReadAllText(_storagePath, Encoding.UTF8);
-                _cachedChannels = JsonSerializer.Deserialize<List<Channel>>(json, JsonOptions) ?? new();
-                _logger.LogInformation("已成功从本地配置文件加载 {Count} 个模型渠道", _cachedChannels.Count);
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "读取本地渠道数据失败，将初始化默认模板数据");
+                try
+                {
+                    var json = File.ReadAllText(path, Encoding.UTF8);
+                    var channels = JsonSerializer.Deserialize<List<Channel>>(json, JsonOptions);
+                    if (channels != null && channels.Count > 0)
+                    {
+                        _cachedChannels = channels;
+                        _logger.LogInformation("已成功从本地配置文件 [{Path}] 加载 {Count} 个模型渠道", path, _cachedChannels.Count);
+                        
+                        // 若不是主存储路径，自动保存至主存储路径完成自愈
+                        if (!string.Equals(Path.GetFullPath(path), Path.GetFullPath(_storagePath), StringComparison.OrdinalIgnoreCase))
+                        {
+                            SaveToFileInternal();
+                        }
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "读取本地渠道数据 [{Path}] 失败", path);
+                }
             }
         }
 

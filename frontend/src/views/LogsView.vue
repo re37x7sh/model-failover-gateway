@@ -4,19 +4,32 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <h2 class="section-title">实时请求与故障转移追踪</h2>
-        <p class="section-subtitle">监控来自 VSCode 插件的每次请求链路，直观查看静默 Failover 切换过程与耗时。</p>
+        <p class="section-subtitle">监控来自 VSCode / 客户端的每次请求链路，支持多维度过滤、关键字搜索与大容量分页查看。</p>
       </div>
 
       <div class="toolbar-actions">
+        <!-- 状态过滤器 -->
         <div class="filter-group">
           <button 
             v-for="f in filters" 
             :key="f.id"
             :class="['filter-btn', { active: currentFilter === f.id }]"
-            @click="currentFilter = f.id"
+            @click="onFilterChange(f.id)"
           >
             {{ f.label }}
           </button>
+        </div>
+
+        <!-- 关键词搜索框 -->
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input 
+            v-model="searchKeyword" 
+            @input="onSearchInput" 
+            class="search-input font-mono" 
+            placeholder="搜索路径/模型/渠道/错误..."
+          />
+          <button v-if="searchKeyword" class="search-clear" @click="clearSearch">✕</button>
         </div>
 
         <button :class="['btn', autoRefresh ? 'btn-primary' : 'btn-secondary', 'btn-sm']" @click="toggleAutoRefresh">
@@ -24,7 +37,7 @@
           <span>{{ autoRefresh ? '自动刷新 (2s)' : '已暂停刷新' }}</span>
         </button>
 
-        <button class="btn btn-secondary btn-sm" @click="$emit('refresh')">🔄 刷新</button>
+        <button class="btn btn-secondary btn-sm" @click="handleManualRefresh">🔄 刷新</button>
         <button class="btn btn-secondary btn-sm" @click="openSettingsModal">⚙️ 保留策略</button>
         <button class="btn btn-danger btn-sm" @click="clearLogs">🗑️ 清空日志</button>
       </div>
@@ -42,7 +55,7 @@
           <div class="persistence-tip">
             <span class="tip-icon">💾</span>
             <div class="tip-text">
-              <strong>自动持久化存储</strong>：所有请求日志均已实时落盘至 <code>data/request_logs.json</code>，网关服务重启或电脑重启后数据依然完整保留！
+              <strong>便携持久化存储</strong>：所有请求日志均已实时落盘至 <code>data/request_logs.json</code>，网关服务重启或电脑重启后数据依然完整保留！
             </div>
           </div>
 
@@ -77,6 +90,7 @@
               <option :value="2000">最多保留 2,000 条 (默认)</option>
               <option :value="5000">最多保留 5,000 条</option>
               <option :value="10000">最多保留 10,000 条</option>
+              <option :value="20000">最多保留 20,000 条</option>
             </select>
           </div>
         </div>
@@ -90,9 +104,17 @@
       </div>
     </div>
 
-    <!-- 日志列表 -->
-    <div v-if="filteredLogs.length === 0" class="glass-card empty-card">
-      <div class="empty-text">当前筛选条件下暂无请求日志</div>
+    <!-- 日志列表展示 -->
+    <div v-if="loading && pagedLogs.length === 0" class="glass-card loading-card">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">正在加载请求日志...</div>
+    </div>
+
+    <div v-else-if="pagedLogs.length === 0" class="glass-card empty-card">
+      <div class="empty-text">
+        <span v-if="searchKeyword">未找到匹配 "{{ searchKeyword }}" 的请求记录</span>
+        <span v-else>当前筛选条件下暂无请求日志</span>
+      </div>
     </div>
 
     <div v-else class="logs-table-container glass-card">
@@ -110,7 +132,7 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="log in filteredLogs" :key="log.id">
+          <template v-for="log in pagedLogs" :key="log.id">
             <tr :class="['log-row', { 'row-failover': log.isFailover, 'row-error': log.statusCode >= 400 }]">
               <td class="font-mono text-dim">{{ formatTime(log.timestamp) }}</td>
               <td class="col-path">
@@ -162,28 +184,28 @@
               </td>
             </tr>
 
-            <!-- 展开的详情与请求头嗅探 -->
+            <!-- 展开的详情折叠行 -->
             <tr v-if="expandedRows[log.id]" class="detail-row">
               <td colspan="8">
-                <div class="expanded-detail-container">
-                  <!-- 错误信息 -->
+                <div class="detail-content">
+                  <!-- 错误信息详情 -->
                   <div v-if="log.errorDetails" class="error-detail-box">
-                    <div class="detail-title">❌ 错误与重试排查信息：</div>
-                    <pre class="detail-content">{{ log.errorDetails }}</pre>
+                    <div class="error-title">🚨 错误/重试详细追踪:</div>
+                    <pre class="error-text font-mono">{{ log.errorDetails }}</pre>
                   </div>
 
-                  <!-- 嗅探到的请求头 -->
-                  <div v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="headers-detail-box">
-                    <div class="headers-detail-header">
-                      <span class="detail-title header-title">📥 客户端请求头 (嗅探提取结果)：</span>
+                  <!-- 嗅探到的客户端请求头 -->
+                  <div v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="headers-sniff-box">
+                    <div class="headers-header">
+                      <span class="headers-title">🕹️ 客户端请求头 (嗅探提取结果):</span>
                       <button class="btn btn-primary btn-xs" @click="copyExtractedHeaders(log.requestHeaders)">
                         📋 提取并复制为渠道请求头配置
                       </button>
                     </div>
-                    <div class="headers-grid">
+                    <div class="headers-grid font-mono">
                       <div v-for="(val, key) in log.requestHeaders" :key="key" class="header-item">
-                        <span class="header-key font-mono">{{ key }}:</span>
-                        <span class="header-val font-mono">{{ val }}</span>
+                        <span class="header-key">{{ key }}:</span>
+                        <span class="header-val" :title="val">{{ val }}</span>
                       </div>
                     </div>
                   </div>
@@ -193,6 +215,87 @@
           </template>
         </tbody>
       </table>
+    </div>
+
+    <!-- 底部现代化分页器 -->
+    <div class="pagination-bar glass-card">
+      <div class="pagination-left">
+        <span class="pagination-info">
+          共 <strong class="text-primary">{{ totalCount }}</strong> 条记录，
+          第 <strong>{{ currentPage }}</strong> / <strong>{{ totalPages }}</strong> 页
+        </span>
+        <div class="page-size-selector">
+          <span class="size-label">每页:</span>
+          <select :value="pageSize" @change="onPageSizeChange(Number($event.target.value))" class="size-select">
+            <option :value="20">20 条</option>
+            <option :value="50">50 条</option>
+            <option :value="100">100 条</option>
+            <option :value="200">200 条</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pagination-controls">
+        <button 
+          class="page-btn page-nav-btn" 
+          :disabled="currentPage <= 1" 
+          @click="goToPage(1)"
+          title="首页"
+        >
+          «
+        </button>
+        <button 
+          class="page-btn page-nav-btn" 
+          :disabled="currentPage <= 1" 
+          @click="goToPage(currentPage - 1)"
+          title="上一页"
+        >
+          ‹
+        </button>
+
+        <template v-for="(p, idx) in visiblePages" :key="idx">
+          <span v-if="p === '...'" class="page-ellipsis">...</span>
+          <button 
+            v-else 
+            :class="['page-btn', { active: p === currentPage }]" 
+            @click="goToPage(p)"
+          >
+            {{ p }}
+          </button>
+        </template>
+
+        <button 
+          class="page-btn page-nav-btn" 
+          :disabled="currentPage >= totalPages" 
+          @click="goToPage(currentPage + 1)"
+          title="下一页"
+        >
+          ›
+        </button>
+        <button 
+          class="page-btn page-nav-btn" 
+          :disabled="currentPage >= totalPages" 
+          @click="goToPage(totalPages)"
+          title="末页"
+        >
+          »
+        </button>
+
+        <!-- 快速跳转 -->
+        <div class="page-jump">
+          <span class="jump-label">跳至</span>
+          <input 
+            v-model="jumpPageInput" 
+            @keyup.enter="handleJumpPage" 
+            type="number" 
+            min="1" 
+            :max="totalPages" 
+            class="jump-input font-mono" 
+            placeholder="页码"
+          />
+          <button class="btn btn-secondary btn-xs jump-btn" @click="handleJumpPage">Go</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -204,7 +307,7 @@ import { api } from '../api';
 const props = defineProps({
   logs: {
     type: Array,
-    required: true
+    default: () => []
   }
 });
 
@@ -220,6 +323,15 @@ const filters = [
   { id: 'error', label: '❌ 仅错误 (4xx/5xx)' },
   { id: 'success', label: '✅ 仅成功' }
 ];
+
+const searchKeyword = ref('');
+const currentPage = ref(1);
+const pageSize = ref(Number(localStorage.getItem('mfg_logs_page_size') || 50));
+const totalCount = ref(0);
+const totalPages = ref(1);
+const pagedLogs = ref([]);
+const loading = ref(false);
+const jumpPageInput = ref('');
 
 const expandedRows = reactive({});
 
@@ -238,7 +350,6 @@ async function copyExtractedHeaders(headers) {
   const lines = Object.entries(headers)
     .filter(([k]) => !IGNORED_COPY_HEADERS.includes(k.toLowerCase()))
     .map(([k, v]) => {
-      // 若请求头包含特定请求ID字段，自动优化为动态 {uuid} 占位符
       if (k.toLowerCase() === 'x-request-id' || k.toLowerCase() === 'x-client-request-id') {
         return `${k}: {uuid}`;
       }
@@ -254,24 +365,109 @@ async function copyExtractedHeaders(headers) {
   }
 }
 
-const filteredLogs = computed(() => {
-  if (currentFilter.value === 'failover') {
-    return props.logs.filter(l => l.isFailover);
-  }
-  if (currentFilter.value === 'error') {
-    return props.logs.filter(l => l.statusCode >= 400);
-  }
-  if (currentFilter.value === 'success') {
-    return props.logs.filter(l => l.statusCode >= 200 && l.statusCode < 400);
-  }
-  return props.logs;
-});
-
 function formatTime(isoString) {
   if (!isoString) return '';
   const date = new Date(isoString);
   return date.toLocaleTimeString('zh-CN', { hour12: false });
 }
+
+function getTrailTitle(log) {
+  if (!log.triedChannels || log.triedChannels.length === 0) return '';
+  return log.triedChannels.join(' -> ');
+}
+
+// 分页与数据请求逻辑
+async function fetchPagedLogs(showLoading = false) {
+  if (showLoading) loading.value = true;
+  try {
+    const res = await api.getPagedLogs(currentPage.value, pageSize.value, currentFilter.value, searchKeyword.value);
+    if (res) {
+      pagedLogs.value = res.items || [];
+      totalCount.value = res.totalCount || 0;
+      totalPages.value = Math.max(1, res.totalPages || 1);
+      currentPage.value = res.page || 1;
+    }
+  } catch (err) {
+    console.error('获取分页日志失败:', err);
+  } finally {
+    if (showLoading) loading.value = false;
+  }
+}
+
+function onFilterChange(filterId) {
+  currentFilter.value = filterId;
+  currentPage.value = 1;
+  fetchPagedLogs(true);
+}
+
+let searchDebounce = null;
+function onSearchInput() {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    currentPage.value = 1;
+    fetchPagedLogs();
+  }, 300);
+}
+
+function clearSearch() {
+  searchKeyword.value = '';
+  currentPage.value = 1;
+  fetchPagedLogs(true);
+}
+
+function onPageSizeChange(newSize) {
+  pageSize.value = newSize;
+  localStorage.setItem('mfg_logs_page_size', String(newSize));
+  currentPage.value = 1;
+  fetchPagedLogs(true);
+}
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages.value || page === currentPage.value) return;
+  currentPage.value = page;
+  fetchPagedLogs(true);
+}
+
+function handleJumpPage() {
+  const p = parseInt(jumpPageInput.value, 10);
+  if (!isNaN(p) && p >= 1 && p <= totalPages.value) {
+    goToPage(p);
+    jumpPageInput.value = '';
+  }
+}
+
+function handleManualRefresh() {
+  fetchPagedLogs(true);
+  emit('refresh');
+}
+
+// 可视化页码序列生成（智能省略）
+const visiblePages = computed(() => {
+  const total = totalPages.value;
+  const current = currentPage.value;
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const pages = [];
+  if (current <= 4) {
+    for (let i = 1; i <= 5; i++) pages.push(i);
+    pages.push('...');
+    pages.push(total);
+  } else if (current >= total - 3) {
+    pages.push(1);
+    pages.push('...');
+    for (let i = total - 4; i <= total; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    pages.push('...');
+    pages.push(current - 1);
+    pages.push(current);
+    pages.push(current + 1);
+    pages.push('...');
+    pages.push(total);
+  }
+  return pages;
+});
 
 function toggleAutoRefresh() {
   autoRefresh.value = !autoRefresh.value;
@@ -285,7 +481,7 @@ function toggleAutoRefresh() {
 function startTimer() {
   stopTimer();
   refreshTimer = setInterval(() => {
-    emit('refresh');
+    fetchPagedLogs(false);
   }, 2000);
 }
 
@@ -296,13 +492,7 @@ function stopTimer() {
   }
 }
 
-function getTrailTitle(log) {
-  if (log.triedChannels && log.triedChannels.length > 0) {
-    return log.triedChannels.join(' ➔ ');
-  }
-  return '-';
-}
-
+// 保留策略配置弹窗
 const showSettingsModal = ref(false);
 const savingSettings = ref(false);
 const logSettings = reactive({
@@ -313,12 +503,12 @@ const logSettings = reactive({
 
 async function openSettingsModal() {
   try {
-    const res = await api.getLogSettings();
-    if (res) {
-      Object.assign(logSettings, res);
+    const data = await api.getLogSettings();
+    if (data) {
+      Object.assign(logSettings, data);
     }
   } catch (err) {
-    console.error('加载日志清理策略失败:', err);
+    console.error('获取日志设置失败:', err);
   }
   showSettingsModal.value = true;
 }
@@ -327,9 +517,9 @@ async function saveSettings() {
   savingSettings.value = true;
   try {
     await api.saveLogSettings(logSettings);
-    emit('toast', '日志保留与清理策略已成功保存！', 'success');
+    emit('toast', '💾 日志清理策略已保存并即刻生效', 'success');
     showSettingsModal.value = false;
-    emit('refresh');
+    fetchPagedLogs(true);
   } catch (err) {
     emit('toast', `保存失败: ${err.message}`, 'error');
   } finally {
@@ -337,7 +527,23 @@ async function saveSettings() {
   }
 }
 
+async function clearLogs() {
+  if (!confirm('确定要彻底清空所有历史请求日志吗？此操作无法撤销。')) return;
+  try {
+    await api.clearLogs();
+    pagedLogs.value = [];
+    totalCount.value = 0;
+    totalPages.value = 1;
+    currentPage.value = 1;
+    emit('toast', '🗑️ 所有日志已彻底清空', 'success');
+    emit('refresh');
+  } catch (err) {
+    emit('toast', `清空失败: ${err.message}`, 'error');
+  }
+}
+
 onMounted(() => {
+  fetchPagedLogs(true);
   if (autoRefresh.value) {
     startTimer();
   }
@@ -345,39 +551,35 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopTimer();
+  clearTimeout(searchDebounce);
 });
-
-async function clearLogs() {
-  if (confirm('确定要清空所有代理请求日志吗？磁盘持久化文件也将被完全清空。')) {
-    try {
-      await api.clearLogs();
-      emit('toast', '请求日志与磁盘文件已成功清空', 'info');
-      emit('refresh');
-    } catch (err) {
-      emit('toast', `清空失败: ${err.message}`, 'error');
-    }
-  }
-}
 </script>
 
 <style scoped>
 .logs-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .toolbar {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-left {
+  flex: 1;
+  min-width: 260px;
 }
 
 .section-title {
   font-size: 18px;
   font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
 }
 
 .section-subtitle {
@@ -389,44 +591,109 @@ async function clearLogs() {
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
 .filter-group {
   display: flex;
-  background: var(--bg-surface);
+  background: var(--bg-surface-2);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 2px;
+  gap: 2px;
 }
 
 .filter-btn {
-  padding: 4px 10px;
-  font-size: 12px;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 12px;
   border-radius: var(--radius-sm);
-  transition: all 0.15s;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  color: var(--text-main);
 }
 
 .filter-btn.active {
-  background: var(--accent-primary);
+  background: var(--primary);
   color: #fff;
   font-weight: 600;
 }
 
-.empty-card {
-  padding: 40px;
-  text-align: center;
-  color: var(--text-muted);
+/* 搜索框 */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
+.search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.search-input {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 6px 28px 6px 30px;
+  font-size: 12px;
+  width: 220px;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  width: 260px;
+  border-color: var(--primary);
+  outline: none;
+  background: var(--bg-surface);
+}
+
+.search-clear {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.search-clear:hover {
+  color: var(--text-main);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.status-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.status-dot.inactive {
+  background: #94a3b8;
+}
+
+/* 表格容器 */
 .logs-table-container {
   overflow-x: auto;
-  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .logs-table {
@@ -438,16 +705,17 @@ async function clearLogs() {
 
 .logs-table th {
   padding: 12px 14px;
-  font-weight: 600;
+  background: rgba(0, 0, 0, 0.2);
   color: var(--text-muted);
+  font-weight: 600;
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
 
 .logs-table td {
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
 }
 
 .log-row:hover {
@@ -458,41 +726,8 @@ async function clearLogs() {
   background: rgba(245, 158, 11, 0.04);
 }
 
-.endpoint-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.method-tag {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent-primary);
-  font-family: var(--font-mono);
-}
-
-.path-text {
-  color: var(--text-main);
-}
-
-.col-trail {
-  max-width: 220px;
-  min-width: 140px;
-}
-
-.col-final {
-  max-width: 180px;
-  min-width: 120px;
-}
-
-.col-model {
-  max-width: 160px;
-  min-width: 100px;
-}
-
-.col-path {
-  max-width: 220px;
-  min-width: 130px;
+.row-error {
+  background: rgba(239, 68, 68, 0.04);
 }
 
 .truncate-text {
@@ -504,231 +739,352 @@ async function clearLogs() {
   vertical-align: middle;
 }
 
-.single-trail {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
+.col-path {
+  max-width: 220px;
+}
+
+.col-model {
+  max-width: 160px;
+}
+
+.col-trail {
+  max-width: 260px;
+}
+
+.col-final {
+  max-width: 160px;
+}
+
+.endpoint-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.method-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.path-text {
+  font-size: 12px;
+  color: var(--text-main);
 }
 
 .failover-trail {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .trail-node {
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   font-size: 11px;
-  font-weight: 500;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  vertical-align: middle;
 }
 
 .trail-fail {
-  background: var(--danger-bg);
-  color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
   text-decoration: line-through;
 }
 
 .trail-success {
-  background: var(--success-bg);
-  color: var(--success);
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  font-weight: 600;
 }
 
 .trail-arrow {
-  color: var(--warning);
+  color: var(--text-muted);
   font-size: 10px;
 }
 
+.trail-badge {
+  margin-left: 4px;
+}
+
 .final-channel-tag {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
   font-weight: 500;
 }
 
-.channel-active {
-  color: var(--text-main);
+.final-channel-tag.channel-active {
+  background: rgba(99, 102, 241, 0.1);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
-.channel-none {
-  color: var(--danger);
+.final-channel-tag.channel-none {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
 }
 
+/* 详情折叠面板 */
 .detail-row td {
-  padding: 0;
-  background: rgba(0, 0, 0, 0.2);
+  padding: 0 14px 14px 14px;
+  background: rgba(0, 0, 0, 0.15);
 }
 
-.expanded-detail-container {
-  padding: 14px 20px;
+.detail-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
 }
 
 .error-detail-box {
-  font-size: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
 }
 
-.headers-detail-box {
+.error-title {
+  color: #f87171;
+  font-weight: 600;
   font-size: 12px;
+  margin-bottom: 4px;
 }
 
-.headers-detail-header {
+.error-text {
+  color: #fca5a5;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.headers-sniff-box {
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.headers-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
 }
 
-.header-title {
-  color: var(--primary) !important;
-}
-
-.btn-xs {
-  padding: 2px 8px;
-  font-size: 11px;
+.headers-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
 }
 
 .headers-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
+  gap: 6px 12px;
+  font-size: 11px;
 }
 
 .header-item {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
   overflow: hidden;
 }
 
 .header-key {
-  color: var(--accent-primary);
-  font-weight: 600;
-  white-space: nowrap;
+  color: #818cf8;
+  flex-shrink: 0;
 }
 
 .header-val {
-  color: var(--text-main);
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.detail-title {
-  color: var(--danger);
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.detail-content {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-all;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-}
-
-.persistence-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: rgba(137, 180, 250, 0.1);
-  border: 1px solid rgba(137, 180, 250, 0.25);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  margin-bottom: 20px;
-}
-
-.tip-icon {
-  font-size: 22px;
-  line-height: 1;
-}
-
-.tip-text {
-  font-size: 13px;
-  color: var(--text-main);
-  line-height: 1.5;
-}
-
-.tip-text code {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #89b4fa;
-}
-
-.switch-row {
+/* 分页器组件样式 */
+.pagination-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  gap: 12px;
 }
 
-.mb-0 {
-  margin-bottom: 0 !important;
+.pagination-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-/* Modal 弹窗（与渠道管理一致的毛玻璃悬浮居中风格） */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  z-index: 1000;
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.size-select {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-btn {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  min-width: 32px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.page-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-nav-btn {
+  font-size: 14px;
+}
+
+.page-ellipsis {
+  color: var(--text-muted);
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.page-jump {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.jump-input {
+  width: 50px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 4px 6px;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+}
+
+.jump-input:focus {
+  border-color: var(--primary);
+}
+
+.loading-card, .empty-card {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
   padding: 20px;
 }
 
 .modal-container {
   width: 100%;
-  max-width: 540px;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 24px;
+  max-width: 520px;
   background: var(--bg-surface);
-  box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  animation: modal-scale 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes modal-scale {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .modal-title {
   font-size: 17px;
   font-weight: 700;
-  color: var(--text-main);
   margin: 0;
 }
 
@@ -738,60 +1094,57 @@ async function clearLogs() {
   color: var(--text-muted);
   font-size: 18px;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.15s;
 }
 
-.close-btn:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.modal-body {
+.persistence-tip {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 14px;
 }
 
 .form-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-main);
 }
 
 .form-hint {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin: 2px 0 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .form-select {
-  background: var(--bg-card);
+  background: var(--bg-surface-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-main);
   padding: 8px 12px;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s;
-}
-
-.form-select:focus {
-  border-color: var(--accent-primary);
 }
 
 .modal-footer {
   display: flex;
-  align-items: center;
   justify-content: flex-end;
-  margin-top: 20px;
-  gap: 12px;
+  gap: 10px;
+  margin-top: 18px;
 }
 </style>

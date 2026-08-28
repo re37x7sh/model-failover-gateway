@@ -10,16 +10,18 @@ public interface ILogService
 {
     void AddLog(ProxyLogEntry entry);
     List<ProxyLogEntry> GetRecentLogs(int limit = 100);
+    PagedResult<ProxyLogEntry> GetPagedLogs(int page = 1, int pageSize = 50, string? filter = null, string? keyword = null);
     void ClearLogs();
     DashboardSummary GetDashboardSummary(int totalChannels, int activeChannels, string? primaryChannelName);
     LogSettings GetSettings();
     void SaveSettings(LogSettings settings);
+    void Flush();
 }
 
 /// <summary>
-/// 支持磁盘持久化与自动定时清理的日志服务实现
+/// 支持磁盘持久化、分页检索与自动定时清理的日志服务实现
 /// </summary>
-public class LogService : ILogService
+public class LogService : ILogService, IDisposable
 {
     private readonly ILogger<LogService> _logger;
     private readonly IWebHostEnvironment _env;
@@ -52,6 +54,9 @@ public class LogService : ILogService
 
         LoadSettings();
         LoadLogs();
+
+        // 注册进程退出事件，确保优雅停机时立即落盘
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Flush();
 
         // 定时执行：脏数据落盘与自动过期清理（每 3 秒检查一次）
         _flushTimer = new System.Threading.Timer(_ =>
@@ -109,6 +114,81 @@ public class LogService : ILogService
                 .Take(limit)
                 .ToList();
         }
+    }
+
+    public PagedResult<ProxyLogEntry> GetPagedLogs(int page = 1, int pageSize = 50, string? filter = null, string? keyword = null)
+    {
+        lock (_lock)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 50;
+            if (pageSize > 500) pageSize = 500;
+
+            var query = _logs.AsEnumerable();
+
+            // 1. 状态过滤 (all / failover / error / success)
+            if (!string.IsNullOrWhiteSpace(filter) && !filter.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                if (filter.Equals("failover", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(x => x.IsFailover);
+                }
+                else if (filter.Equals("error", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(x => x.StatusCode >= 400);
+                }
+                else if (filter.Equals("success", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(x => x.StatusCode >= 200 && x.StatusCode < 400);
+                }
+            }
+
+            // 2. 关键字搜索 (路径 / 模型 / 最终渠道 / 尝试渠道 / 状态码 / 错误信息)
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var kw = keyword.Trim();
+                query = query.Where(x => 
+                    (x.RequestPath != null && x.RequestPath.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.Model != null && x.Model.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.FinalChannel != null && x.FinalChannel.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.ErrorDetails != null && x.ErrorDetails.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.TriedChannels != null && x.TriedChannels.Any(tc => tc.Contains(kw, StringComparison.OrdinalIgnoreCase))) ||
+                    x.StatusCode.ToString().Contains(kw)
+                );
+            }
+
+            var totalCount = query.Count();
+            var items = query
+                .OrderByDescending(x => x.Timestamp)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return new PagedResult<ProxyLogEntry>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+    }
+
+    public void Flush()
+    {
+        lock (_lock)
+        {
+            if (_isDirty)
+            {
+                SaveLogsUnderLock();
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        Flush();
+        _flushTimer.Dispose();
     }
 
     public void ClearLogs()
@@ -231,22 +311,70 @@ public class LogService : ILogService
     {
         try
         {
+            var loadedLogs = new List<ProxyLogEntry>();
+
+            // 1. 读取主日志文件
             if (File.Exists(_logsPath))
             {
                 var json = File.ReadAllText(_logsPath);
                 var items = JsonSerializer.Deserialize<List<ProxyLogEntry>>(json);
                 if (items != null)
                 {
-                    lock (_lock)
+                    loadedLogs.AddRange(items);
+                }
+            }
+
+            // 2. 检查并合并历史分散在 bin/Debug 等输出目录的孤立日志
+            var candidatePaths = new List<string>
+            {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "request_logs.json"),
+                Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "data", "request_logs.json")),
+                Path.Combine(Directory.GetCurrentDirectory(), "data", "request_logs.json")
+            };
+
+            var mergedCount = 0;
+            var seenIds = new HashSet<string>(loadedLogs.Select(l => l.Id));
+
+            foreach (var candidate in candidatePaths.Distinct())
+            {
+                if (File.Exists(candidate) && !string.Equals(Path.GetFullPath(candidate), Path.GetFullPath(_logsPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    try
                     {
-                        _logs.Clear();
-                        _logs.AddRange(items);
-                        _totalRequests = items.Count;
-                        _totalFailovers = items.Count(x => x.IsFailover);
-                        _successfulRequests = items.Count(x => x.StatusCode >= 200 && x.StatusCode < 400);
-                        _failedRequests = items.Count(x => x.StatusCode < 200 || x.StatusCode >= 400);
+                        var json = File.ReadAllText(candidate);
+                        var extraItems = JsonSerializer.Deserialize<List<ProxyLogEntry>>(json);
+                        if (extraItems != null)
+                        {
+                            foreach (var item in extraItems)
+                            {
+                                if (seenIds.Add(item.Id))
+                                {
+                                    loadedLogs.Add(item);
+                                    mergedCount++;
+                                }
+                            }
+                        }
                     }
-                    _logger.LogInformation("已从磁盘恢复 {Count} 条历史请求日志", items.Count);
+                    catch
+                    {
+                        // 忽略单个文件解析异常
+                    }
+                }
+            }
+
+            lock (_lock)
+            {
+                _logs.Clear();
+                _logs.AddRange(loadedLogs.OrderBy(x => x.Timestamp));
+                _totalRequests = _logs.Count;
+                _totalFailovers = _logs.Count(x => x.IsFailover);
+                _successfulRequests = _logs.Count(x => x.StatusCode >= 200 && x.StatusCode < 400);
+                _failedRequests = _logs.Count(x => x.StatusCode < 200 || x.StatusCode >= 400);
+
+                if (mergedCount > 0)
+                {
+                    _logger.LogInformation("🎉 历史请求日志自愈完成：已成功合并并恢复 {Count} 条历史日志！", mergedCount);
+                    SaveLogsUnderLock();
                 }
             }
         }

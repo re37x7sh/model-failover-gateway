@@ -1,17 +1,26 @@
 using ModelFailoverGateway.Services;
 
-// 智能自适应 ContentRoot 路径，无论从项目根目录、backend 目录或 bin 输出目录双击均能正确加载配置文件与静态资源
-var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-var currentDir = Directory.GetCurrentDirectory();
-var contentRoot = currentDir;
+// 智能自适应 ContentRoot 路径（方案A：便携独立模式）：基于 exe 真实绝对物理目录，彻底避免因启动快捷方式/脚本工作目录漂移而导致数据分散
+var baseDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+var currentDir = Directory.GetCurrentDirectory().TrimEnd('\\', '/');
+string contentRoot = baseDir;
 
-if (Directory.Exists(Path.Combine(currentDir, "backend")) && File.Exists(Path.Combine(currentDir, "backend", "appsettings.json")))
+// 1. 若是从源码输出目录 (bin/Debug 或 bin/Release) 启动，自动向上回溯至源码 backend 目录
+var devBackendDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+if (File.Exists(Path.Combine(devBackendDir, "ModelFailoverGateway.csproj")) || 
+    (Directory.Exists(Path.Combine(devBackendDir, "data")) && File.Exists(Path.Combine(devBackendDir, "appsettings.json"))))
+{
+    contentRoot = devBackendDir;
+}
+// 2. 若是从项目根目录启动（例如包含 backend 子目录）
+else if (Directory.Exists(Path.Combine(currentDir, "backend")) && File.Exists(Path.Combine(currentDir, "backend", "appsettings.json")))
 {
     contentRoot = Path.Combine(currentDir, "backend");
 }
-else if (!File.Exists(Path.Combine(currentDir, "appsettings.json")) && File.Exists(Path.Combine(baseDir, "appsettings.json")))
+// 3. 若当前工作目录就是有效根目录（包含 wwwroot 与 appsettings.json）
+else if (File.Exists(Path.Combine(currentDir, "appsettings.json")) && Directory.Exists(Path.Combine(currentDir, "wwwroot")))
 {
-    contentRoot = baseDir;
+    contentRoot = currentDir;
 }
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -125,6 +134,21 @@ app.Map("/{**catchAll}", async (HttpContext context, IProxyEngine proxyEngine) =
 
     // 转发模型请求并执行分组过滤、模型映射与故障转移逻辑
     await proxyEngine.ForwardRequestAsync(context);
+});
+
+// 注册应用优雅停机事件，确保关机或退出时内存数据立即同步落盘
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+var tokenStatsService = app.Services.GetRequiredService<ITokenStatsService>();
+var logService = app.Services.GetRequiredService<ILogService>();
+
+lifetime.ApplicationStopping.Register(() =>
+{
+    try
+    {
+        tokenStatsService.Flush();
+        logService.Flush();
+    }
+    catch { }
 });
 
 // 监听动态配置的端口
