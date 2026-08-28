@@ -19,7 +19,7 @@ public class TokenUsageRecord
 }
 
 /// <summary>
-/// Token 全局汇总统计 DTO
+/// Token 全局汇总统计 DTO（包含真实费用折算）
 /// </summary>
 public class TokenStatsSummaryDto
 {
@@ -28,6 +28,10 @@ public class TokenStatsSummaryDto
     public long CompletionTokens { get; set; }
     public long TodayTokens { get; set; }
     public long TotalRequests { get; set; }
+    public double TotalCostUsd { get; set; }
+    public double TotalCostCny { get; set; }
+    public double TodayCostUsd { get; set; }
+    public double TodayCostCny { get; set; }
 }
 
 /// <summary>
@@ -41,6 +45,8 @@ public class ChannelTokenStatsDto
     public long PromptTokens { get; set; }
     public long CompletionTokens { get; set; }
     public long TotalTokens => PromptTokens + CompletionTokens;
+    public double CostUsd { get; set; }
+    public double CostCny { get; set; }
     public long RequestCount { get; set; }
     public int KeyCount { get; set; }
     public DateTime? LastUsed { get; set; }
@@ -58,6 +64,37 @@ public class KeyTokenStatsDto
     public long PromptTokens { get; set; }
     public long CompletionTokens { get; set; }
     public long TotalTokens => PromptTokens + CompletionTokens;
+    public double CostUsd { get; set; }
+    public double CostCny { get; set; }
     public long RequestCount { get; set; }
     public DateTime? LastUsed { get; set; }
+}
+
+/// <summary>
+/// 按日聚合趋势统计 DTO
+/// </summary>
+public class DailyTokenStatsDto
+{
+    public string Date { get; set; } = string.Empty; // yyyy-MM-dd
+    public long PromptTokens { get; set; }
+    public long CompletionTokens { get; set; }
+    public long TotalTokens => PromptTokens + CompletionTokens;
+    public double CostUsd { get; set; }
+    public double CostCny { get; set; }
+    public long RequestCount { get; set; }
+}
+
+/// <summary>
+/// 模型分布统计 DTO
+/// </summary>
+public class ModelTokenStatsDto
+{
+    public string Model { get; set; } = string.Empty;
+    public long PromptTokens { get; set; }
+    public long CompletionTokens { get; set; }
+    public long TotalTokens => PromptTokens + CompletionTokens;
+    public double CostUsd { get; set; }
+    public double CostCny { get; set; }
+    public long RequestCount { get; set; }
+    public double Percentage { get; set; }
 }

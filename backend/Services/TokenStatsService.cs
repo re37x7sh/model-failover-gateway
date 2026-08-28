@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using ModelFailoverGateway.Models;
 
@@ -10,6 +11,9 @@ public interface ITokenStatsService
     TokenStatsSummaryDto GetSummary();
     List<ChannelTokenStatsDto> GetChannelStats();
     List<KeyTokenStatsDto> GetKeyStats(string? channelId = null);
+    List<DailyTokenStatsDto> GetDailyStats(int days = 7);
+    List<ModelTokenStatsDto> GetModelDistribution();
+    string GenerateCsvExport();
     void ClearStats();
     void Flush();
 }
@@ -23,6 +27,9 @@ public class TokenStatsService : ITokenStatsService, IDisposable
     private readonly object _lock = new();
     private bool _isDirty = false;
     private readonly System.Threading.Timer _saveTimer;
+
+    // 美元兑人民币参考汇率
+    private const double UsdToCnyRate = 7.25;
 
     public TokenStatsService(ILogger<TokenStatsService> logger, IWebHostEnvironment env)
     {
@@ -63,7 +70,7 @@ public class TokenStatsService : ITokenStatsService, IDisposable
     {
         if (promptTokens <= 0 && completionTokens <= 0)
         {
-            // 如果未能从响应中解析出有效 token 数，估算保底值或忽略
+            // 如果未能从响应中解析出有效 token 数，估算保底值
             promptTokens = 1;
             completionTokens = 1;
         }
@@ -106,9 +113,12 @@ public class TokenStatsService : ITokenStatsService, IDisposable
 
             var totalPrompt = _records.Sum(r => r.PromptTokens);
             var totalCompletion = _records.Sum(r => r.CompletionTokens);
-            var todayTotal = _records
-                .Where(r => r.Timestamp >= todayUtc)
-                .Sum(r => r.TotalTokens);
+            
+            var todayRecords = _records.Where(r => r.Timestamp >= todayUtc).ToList();
+            var todayTotal = todayRecords.Sum(r => r.TotalTokens);
+
+            var (totalUsd, totalCny) = CalculateTotalCost(_records);
+            var (todayUsd, todayCny) = CalculateTotalCost(todayRecords);
 
             return new TokenStatsSummaryDto
             {
@@ -116,7 +126,11 @@ public class TokenStatsService : ITokenStatsService, IDisposable
                 PromptTokens = totalPrompt,
                 CompletionTokens = totalCompletion,
                 TodayTokens = todayTotal,
-                TotalRequests = _records.Count
+                TotalRequests = _records.Count,
+                TotalCostUsd = totalUsd,
+                TotalCostCny = totalCny,
+                TodayCostUsd = todayUsd,
+                TodayCostCny = todayCny
             };
         }
     }
@@ -130,6 +144,7 @@ public class TokenStatsService : ITokenStatsService, IDisposable
                 .Select(g =>
                 {
                     var first = g.First();
+                    var (usd, cny) = CalculateTotalCost(g);
                     return new ChannelTokenStatsDto
                     {
                         ChannelId = g.Key,
@@ -137,6 +152,8 @@ public class TokenStatsService : ITokenStatsService, IDisposable
                         Group = first.Group,
                         PromptTokens = g.Sum(x => x.PromptTokens),
                         CompletionTokens = g.Sum(x => x.CompletionTokens),
+                        CostUsd = usd,
+                        CostCny = cny,
                         RequestCount = g.Count(),
                         KeyCount = g.Select(x => x.MaskedKey).Distinct().Count(),
                         LastUsed = g.Max(x => x.Timestamp)
@@ -164,6 +181,7 @@ public class TokenStatsService : ITokenStatsService, IDisposable
                 .Select(g =>
                 {
                     var first = g.First();
+                    var (usd, cny) = CalculateTotalCost(g);
                     return new KeyTokenStatsDto
                     {
                         ChannelId = g.Key.ChannelId,
@@ -172,6 +190,8 @@ public class TokenStatsService : ITokenStatsService, IDisposable
                         MaskedKey = g.Key.MaskedKey,
                         PromptTokens = g.Sum(x => x.PromptTokens),
                         CompletionTokens = g.Sum(x => x.CompletionTokens),
+                        CostUsd = usd,
+                        CostCny = cny,
                         RequestCount = g.Count(),
                         LastUsed = g.Max(x => x.Timestamp)
                     };
@@ -181,6 +201,197 @@ public class TokenStatsService : ITokenStatsService, IDisposable
 
             return grouped;
         }
+    }
+
+    public List<DailyTokenStatsDto> GetDailyStats(int days = 7)
+    {
+        if (days < 1) days = 7;
+        if (days > 90) days = 90;
+
+        lock (_lock)
+        {
+            var today = DateTime.UtcNow.Date;
+            var startDate = today.AddDays(-days + 1);
+
+            // 按天分组当前范围内的记录
+            var recordsInRange = _records.Where(r => r.Timestamp.Date >= startDate).ToList();
+            var grouped = recordsInRange
+                .GroupBy(r => r.Timestamp.Date.ToString("yyyy-MM-dd"))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var result = new List<DailyTokenStatsDto>();
+            for (var i = 0; i < days; i++)
+            {
+                var curDate = startDate.AddDays(i);
+                var dateKey = curDate.ToString("yyyy-MM-dd");
+
+                if (grouped.TryGetValue(dateKey, out var dailyList))
+                {
+                    var (usd, cny) = CalculateTotalCost(dailyList);
+                    result.Add(new DailyTokenStatsDto
+                    {
+                        Date = dateKey,
+                        PromptTokens = dailyList.Sum(x => x.PromptTokens),
+                        CompletionTokens = dailyList.Sum(x => x.CompletionTokens),
+                        CostUsd = usd,
+                        CostCny = cny,
+                        RequestCount = dailyList.Count
+                    });
+                }
+                else
+                {
+                    result.Add(new DailyTokenStatsDto
+                    {
+                        Date = dateKey,
+                        PromptTokens = 0,
+                        CompletionTokens = 0,
+                        CostUsd = 0,
+                        CostCny = 0,
+                        RequestCount = 0
+                    });
+                }
+            }
+
+            return result;
+        }
+    }
+
+    public List<ModelTokenStatsDto> GetModelDistribution()
+    {
+        lock (_lock)
+        {
+            var totalTokens = _records.Sum(r => r.TotalTokens);
+            if (totalTokens == 0) return new List<ModelTokenStatsDto>();
+
+            var grouped = _records
+                .GroupBy(r => string.IsNullOrWhiteSpace(r.Model) ? "Unknown / Default" : r.Model)
+                .Select(g =>
+                {
+                    var (usd, cny) = CalculateTotalCost(g);
+                    var modelTotal = g.Sum(x => x.TotalTokens);
+                    return new ModelTokenStatsDto
+                    {
+                        Model = g.Key,
+                        PromptTokens = g.Sum(x => x.PromptTokens),
+                        CompletionTokens = g.Sum(x => x.CompletionTokens),
+                        CostUsd = usd,
+                        CostCny = cny,
+                        RequestCount = g.Count(),
+                        Percentage = Math.Round((double)modelTotal / totalTokens * 100, 2)
+                    };
+                })
+                .OrderByDescending(x => x.TotalTokens)
+                .ToList();
+
+            return grouped;
+        }
+    }
+
+    public string GenerateCsvExport()
+    {
+        lock (_lock)
+        {
+            var sb = new StringBuilder();
+            // UTF-8 BOM
+            sb.Append('\uFEFF');
+            sb.AppendLine("ID,时间(UTC),渠道名称,分组,脱敏Key,模型,PromptTokens,CompletionTokens,TotalTokens,预估费用(USD),预估费用(CNY),是否流式");
+
+            foreach (var r in _records.OrderByDescending(x => x.Timestamp))
+            {
+                var (usd, cny) = CalculateCost(r.Model, r.PromptTokens, r.CompletionTokens);
+                var isStreamStr = r.IsStream ? "是" : "否";
+                sb.AppendLine($"\"{r.Id}\",\"{r.Timestamp:yyyy-MM-dd HH:mm:ss}\",\"{EscapeCsv(r.ChannelName)}\",\"{EscapeCsv(r.Group)}\",\"{r.MaskedKey}\",\"{EscapeCsv(r.Model ?? "-")}\",{r.PromptTokens},{r.CompletionTokens},{r.TotalTokens},{usd:F4},{cny:F4},\"{isStreamStr}\"");
+            }
+
+            return sb.ToString();
+        }
+    }
+
+    private static string EscapeCsv(string val)
+    {
+        if (string.IsNullOrEmpty(val)) return "";
+        return val.Replace("\"", "\"\"");
+    }
+
+    public static (double usd, double cny) CalculateCost(string? model, long promptTokens, long completionTokens)
+    {
+        var m = (model ?? "").ToLowerInvariant();
+        double promptRate = 1.50;    // USD per 1M tokens
+        double compRate = 4.50;      // USD per 1M tokens
+
+        // Claude 3.7 / 3.5 Sonnet 系列
+        if (m.Contains("claude-3-7") || m.Contains("claude-3.7") || m.Contains("claude-3-5-sonnet") || m.Contains("claude-3.5-sonnet") || m.Contains("sonnet"))
+        {
+            promptRate = 3.00;
+            compRate = 15.00;
+        }
+        // Claude 3.5 Haiku 系列
+        else if (m.Contains("haiku"))
+        {
+            promptRate = 0.80;
+            compRate = 4.00;
+        }
+        // Claude Opus 系列
+        else if (m.Contains("opus"))
+        {
+            promptRate = 15.00;
+            compRate = 75.00;
+        }
+        // GPT-4o Mini 系列
+        else if (m.Contains("4o-mini") || m.Contains("gpt-4o-mini"))
+        {
+            promptRate = 0.15;
+            compRate = 0.60;
+        }
+        // GPT-4o 系列
+        else if (m.Contains("4o") || m.Contains("gpt-4o"))
+        {
+            promptRate = 2.50;
+            compRate = 10.00;
+        }
+        // GPT-5 / GPT-5.6 / o1 / o3 系列
+        else if (m.Contains("gpt-5") || m.Contains("o1") || m.Contains("o3"))
+        {
+            promptRate = 5.00;
+            compRate = 15.00;
+        }
+        // DeepSeek-R1 (Reasoner)
+        else if (m.Contains("deepseek-r1") || m.Contains("reasoner") || m.Contains("r1"))
+        {
+            promptRate = 0.55;
+            compRate = 2.19;
+        }
+        // DeepSeek-V3 / DeepSeek-Chat
+        else if (m.Contains("deepseek"))
+        {
+            promptRate = 0.14;
+            compRate = 0.28;
+        }
+        // GPT-4 Turbo
+        else if (m.Contains("gpt-4"))
+        {
+            promptRate = 10.00;
+            compRate = 30.00;
+        }
+
+        var usd = (promptTokens * promptRate + completionTokens * compRate) / 1_000_000.0;
+        var cny = usd * UsdToCnyRate;
+        return (Math.Round(usd, 4), Math.Round(cny, 4));
+    }
+
+    private static (double usd, double cny) CalculateTotalCost(IEnumerable<TokenUsageRecord> records)
+    {
+        double totalUsd = 0;
+        double totalCny = 0;
+
+        foreach (var r in records)
+        {
+            var (usd, cny) = CalculateCost(r.Model, r.PromptTokens, r.CompletionTokens);
+            totalUsd += usd;
+            totalCny += cny;
+        }
+
+        return (Math.Round(totalUsd, 4), Math.Round(totalCny, 4));
     }
 
     public void ClearStats()

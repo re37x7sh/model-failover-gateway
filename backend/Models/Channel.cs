@@ -152,6 +152,28 @@ public class Channel
     public int FailCount { get; set; } = 0;
 
     /// <summary>
+    /// 连续故障失败次数（用于触发自动熔断冷却）
+    /// </summary>
+    public int ConsecutiveFailures { get; set; } = 0;
+
+    /// <summary>
+    /// 智能熔断冷却截止时间 (UTC)
+    /// </summary>
+    public DateTime? CircuitBreakerUntilUtc { get; set; }
+
+    /// <summary>
+    /// 当前是否处于智能熔断冷却中
+    /// </summary>
+    public bool IsCircuitBroken => CircuitBreakerUntilUtc.HasValue && CircuitBreakerUntilUtc.Value > DateTime.UtcNow;
+
+    /// <summary>
+    /// 剩余熔断冷却秒数
+    /// </summary>
+    public int CircuitBreakerRemainingSeconds => IsCircuitBroken 
+        ? Math.Max(0, (int)Math.Ceiling((CircuitBreakerUntilUtc!.Value - DateTime.UtcNow).TotalSeconds)) 
+        : 0;
+
+    /// <summary>
     /// 最近一次失败原因
     /// </summary>
     public string? LastFailureReason { get; set; }

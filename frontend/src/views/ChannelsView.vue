@@ -91,7 +91,11 @@
                 🔄 模型别名映射
               </span>
 
-              <span v-if="channel.failCount > 0" class="badge badge-danger">
+              <!-- 智能熔断冷却标签 -->
+              <span v-if="channel.isCircuitBroken" class="badge badge-warning font-mono" :title="`该渠道因连续报错已触发智能熔断冷却，剩余 ${channel.circuitBreakerRemainingSeconds} 秒`">
+                ⚡ 智能熔断冷却中 ({{ channel.circuitBreakerRemainingSeconds }}s)
+              </span>
+              <span v-else-if="channel.failCount > 0" class="badge badge-danger">
                 连续失败 {{ channel.failCount }} 次
               </span>
               <span v-if="channel.lastFailureReason" class="badge badge-warning" :title="channel.lastFailureReason">

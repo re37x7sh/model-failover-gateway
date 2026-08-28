@@ -194,6 +194,17 @@ public class ProxyEngine : IProxyEngine
         for (var i = 0; i < activeChannels.Count; i++)
         {
             var channel = activeChannels[i];
+
+            // 智能熔断检查：若渠道正处于熔断冷却期，直接秒级跳过，避免客户端等待超时
+            if (channel.IsCircuitBroken)
+            {
+                var remainingSec = channel.CircuitBreakerRemainingSeconds;
+                _logger.LogWarning("渠道 [{Name}] 处于智能熔断冷却中 (剩余 {Sec}s)，已自动快速跳过", channel.Name, remainingSec);
+                triedChannels.Add($"{channel.Name} (⚡熔断中，剩余{remainingSec}s)");
+                isFailoverOccurred = true;
+                continue;
+            }
+
             var keys = channel.GetApiKeys();
             if (keys.Count == 0)
             {

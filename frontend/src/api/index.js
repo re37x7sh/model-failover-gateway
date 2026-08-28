@@ -55,6 +55,9 @@ export const api = {
   getChannelTokenStats: () => request('/tokenstats/channels'),
   getKeyTokenStats: (channelId = '') => 
     request(`/tokenstats/keys${channelId ? `?channelId=${encodeURIComponent(channelId)}` : ''}`),
+  getDailyTokenStats: (days = 7) => request(`/tokenstats/daily?days=${days}`),
+  getModelTokenStats: () => request('/tokenstats/models'),
+  getExportCsvUrl: () => `${API_BASE}/tokenstats/export/csv`,
   clearTokenStats: () => request('/tokenstats', { method: 'DELETE' }),
 
   // 渠道异常通知

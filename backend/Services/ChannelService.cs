@@ -367,14 +367,21 @@ public class ChannelService : IChannelService
             if (channel != null)
             {
                 channel.FailCount++;
+                channel.ConsecutiveFailures++;
                 channel.LastFailureReason = reason;
                 channel.UpdatedAt = DateTime.UtcNow;
 
-                // NOTE: 如果连续失败超过阈值或明确欠费，临时熔断禁用
-                if (channel.FailCount >= 3 || reason.Contains("欠费") || reason.Contains("insufficient"))
+                // 明确欠费则彻底禁用
+                if (reason.Contains("欠费") || reason.Contains("insufficient") || reason.Contains("quota") || reason.Contains("402"))
                 {
                     channel.IsEnabled = false;
-                    _logger.LogWarning("渠道 [{Name}] 触发自动熔断保护并已临时禁用", channel.Name);
+                    _logger.LogWarning("渠道 [{Name}] 触发欠费检测并已自动禁用", channel.Name);
+                }
+                // 连续失败 3 次触发 30 秒智能熔断冷却，快速跳过，避免客户端卡顿
+                else if (channel.ConsecutiveFailures >= 3)
+                {
+                    channel.CircuitBreakerUntilUtc = DateTime.UtcNow.AddSeconds(30);
+                    _logger.LogWarning("渠道 [{Name}] 连续失败 {Count} 次，已触发智能熔断冷却 30 秒", channel.Name, channel.ConsecutiveFailures);
                 }
 
                 SaveToFileInternal();
@@ -395,6 +402,8 @@ public class ChannelService : IChannelService
             if (channel != null)
             {
                 channel.FailCount = 0;
+                channel.ConsecutiveFailures = 0;
+                channel.CircuitBreakerUntilUtc = null;
                 channel.LastFailureReason = null;
                 channel.LastSuccessAt = DateTime.UtcNow;
                 channel.UpdatedAt = DateTime.UtcNow;

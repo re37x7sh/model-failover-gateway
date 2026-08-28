@@ -1,6 +1,6 @@
 <template>
   <div class="token-stats-view">
-    <!-- 顶部 KPI 指标卡片 -->
+    <!-- 顶部 KPI 指标卡片 (包含费用换算) -->
     <div class="kpi-grid">
       <div class="kpi-card highlight-card">
         <div class="kpi-icon-box">💎</div>
@@ -8,6 +8,15 @@
           <div class="kpi-label">累计消耗 Total Tokens</div>
           <div class="kpi-value font-mono">{{ formatNumber(summary.totalTokens) }}</div>
           <div class="kpi-subtext">全渠道累计 Token 吞吐</div>
+        </div>
+      </div>
+
+      <div class="kpi-card cost-card">
+        <div class="kpi-icon-box cost-icon">💰</div>
+        <div class="kpi-content">
+          <div class="kpi-label">预估总支出 (Total Cost)</div>
+          <div class="kpi-value font-mono text-cost">¥{{ formatCurrency(summary.totalCostCny) }}</div>
+          <div class="kpi-subtext font-mono">${{ formatCurrency(summary.totalCostUsd) }} USD (参考汇率 7.25)</div>
         </div>
       </div>
 
@@ -34,7 +43,7 @@
         <div class="kpi-content">
           <div class="kpi-label">今日消耗 (Today)</div>
           <div class="kpi-value font-mono text-success">{{ formatNumber(summary.todayTokens) }}</div>
-          <div class="kpi-subtext">今日 UTC 累计 Token</div>
+          <div class="kpi-subtext">今日预估 ¥{{ formatCurrency(summary.todayCostCny) }} (${{ formatCurrency(summary.todayCostUsd) }})</div>
         </div>
       </div>
 
@@ -48,8 +57,106 @@
       </div>
     </div>
 
+    <!-- 趋势图与模型分布看板 -->
+    <div class="analytics-grid">
+      <!-- 每日趋势图表 -->
+      <div class="glass-card chart-card">
+        <div class="chart-header">
+          <div class="chart-title-box">
+            <span class="chart-icon">📈</span>
+            <span class="chart-title">Token 消耗与费用趋势</span>
+          </div>
+          <div class="chart-actions">
+            <div class="range-selector">
+              <button 
+                v-for="d in [7, 14, 30]" 
+                :key="d" 
+                :class="['range-btn', { active: trendDays === d }]"
+                @click="changeTrendDays(d)"
+              >
+                {{ d }}天
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 纯 CSS / SVG 响应式柱状图 -->
+        <div class="chart-body">
+          <div v-if="dailyStats.length === 0" class="chart-empty">暂无趋势数据</div>
+          <div v-else class="bars-container">
+            <div 
+              v-for="(day, idx) in dailyStats" 
+              :key="idx" 
+              class="bar-col"
+              @mouseenter="hoveredDay = day"
+              @mouseleave="hoveredDay = null"
+            >
+              <div class="bar-track">
+                <div 
+                  class="bar-fill" 
+                  :style="{ height: getBarHeight(day.totalTokens) }"
+                  :class="{ 'has-data': day.totalTokens > 0 }"
+                ></div>
+              </div>
+              <div class="bar-label font-mono">{{ formatDayLabel(day.date) }}</div>
+            </div>
+          </div>
+
+          <!-- 悬浮数据卡片 Tooltip -->
+          <div v-if="hoveredDay" class="chart-tooltip glass-card font-mono">
+            <div class="tooltip-date">📅 {{ hoveredDay.date }}</div>
+            <div class="tooltip-row">
+              <span>总 Token:</span>
+              <strong class="text-primary">{{ formatNumber(hoveredDay.totalTokens) }}</strong>
+            </div>
+            <div class="tooltip-row text-dim">
+              <span>Prompt / Comp:</span>
+              <span>{{ formatNumber(hoveredDay.promptTokens) }} / {{ formatNumber(hoveredDay.completionTokens) }}</span>
+            </div>
+            <div class="tooltip-row">
+              <span>预估费用:</span>
+              <strong class="text-cost">¥{{ formatCurrency(hoveredDay.costCny) }} (${{ formatCurrency(hoveredDay.costUsd) }})</strong>
+            </div>
+            <div class="tooltip-row text-dim">
+              <span>请求次数:</span>
+              <span>{{ hoveredDay.requestCount }} 次</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模型消耗占比分布 -->
+      <div class="glass-card models-card">
+        <div class="card-header-simple">
+          <div class="chart-title-box">
+            <span class="chart-icon">🍩</span>
+            <span class="chart-title">模型消耗分布 (Top Models)</span>
+          </div>
+        </div>
+
+        <div class="models-list">
+          <div v-if="modelStats.length === 0" class="chart-empty">暂无模型数据</div>
+          <div v-else v-for="(m, idx) in modelStats.slice(0, 6)" :key="idx" class="model-item">
+            <div class="model-meta">
+              <span class="model-name font-mono truncate-text" :title="m.model">{{ m.model }}</span>
+              <span class="model-tokens font-mono">{{ formatNumber(m.totalTokens) }} ({{ m.percentage }}%)</span>
+            </div>
+            <div class="model-bar-track">
+              <div 
+                class="model-bar-fill" 
+                :style="{ width: `${m.percentage}%`, background: getModelGradient(idx) }"
+              ></div>
+            </div>
+            <div class="model-cost font-mono text-dim">
+              预估: ¥{{ formatCurrency(m.costCny) }} (${{ formatCurrency(m.costUsd) }}) · {{ m.requestCount }} 次请求
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 统计维度切换与工具栏 -->
-    <div class="stats-panel card">
+    <div class="stats-panel card glass-card">
       <div class="panel-header">
         <div class="tabs-box">
           <button 
@@ -90,6 +197,9 @@
           <button class="btn btn-secondary btn-sm" @click="loadData" :disabled="loading">
             <span>🔄 刷新</span>
           </button>
+          <button class="btn btn-secondary btn-sm" @click="exportCsv" :disabled="summary.totalTokens === 0">
+            <span>📥 导出 CSV 账单</span>
+          </button>
           <button class="btn btn-danger-outline btn-sm" @click="confirmClear" :disabled="summary.totalTokens === 0">
             <span>🗑️ 清空统计</span>
           </button>
@@ -104,6 +214,7 @@
               <th>渠道名称</th>
               <th>所属分组</th>
               <th>总 Token 消耗 (占比)</th>
+              <th>预估费用 (¥ / $)</th>
               <th>Prompt (输入)</th>
               <th>Completion (输出)</th>
               <th>请求次数</th>
@@ -114,7 +225,7 @@
           </thead>
           <tbody>
             <tr v-if="channelStats.length === 0">
-              <td colspan="9" class="empty-cell">
+              <td colspan="10" class="empty-cell">
                 <div class="empty-box">
                   <span class="empty-icon">📊</span>
                   <span>暂无 Token 消耗数据。发送请求后将实时自动统计！</span>
@@ -122,37 +233,43 @@
               </td>
             </tr>
             <tr v-for="item in channelStats" :key="item.channelId" class="data-row">
-              <td class="font-bold channel-name-cell">
-                <span>{{ item.channelName }}</span>
+              <td class="col-channel">
+                <div class="channel-name-box">
+                  <span class="channel-dot"></span>
+                  <span class="channel-text font-bold">{{ item.channelName }}</span>
+                </div>
               </td>
               <td>
-                <span :class="['badge', getGroupBadgeClass(item.group)]">
+                <span :class="['group-badge', getGroupBadgeClass(item.group)]">
                   {{ getGroupLabel(item.group) }}
                 </span>
               </td>
               <td>
                 <div class="token-progress-cell">
-                  <span class="font-mono font-bold">{{ formatNumber(item.totalTokens) }}</span>
-                  <div class="mini-bar-bg">
-                    <div 
-                      class="mini-bar-fill" 
-                      :style="{ width: `${getPercent(item.totalTokens, summary.totalTokens)}%` }"
-                    ></div>
+                  <div class="token-val font-mono">
+                    <strong>{{ formatNumber(item.totalTokens) }}</strong>
+                    <span class="token-pct text-dim">({{ getPercent(item.totalTokens, summary.totalTokens) }}%)</span>
                   </div>
-                  <span class="ratio-text">{{ getPercent(item.totalTokens, summary.totalTokens) }}%</span>
+                  <div class="progress-track">
+                    <div class="progress-bar" :style="{ width: `${getPercent(item.totalTokens, summary.totalTokens)}%` }"></div>
+                  </div>
                 </div>
               </td>
-              <td class="font-mono text-muted">{{ formatNumber(item.promptTokens) }}</td>
-              <td class="font-mono text-muted">{{ formatNumber(item.completionTokens) }}</td>
-              <td class="font-mono font-bold">{{ formatNumber(item.requestCount) }}</td>
+              <td class="font-mono">
+                <div class="cost-cell">
+                  <span class="cost-cny">¥{{ formatCurrency(item.costCny) }}</span>
+                  <span class="cost-usd text-dim">${{ formatCurrency(item.costUsd) }}</span>
+                </div>
+              </td>
+              <td class="font-mono text-dim">{{ formatNumber(item.promptTokens) }}</td>
+              <td class="font-mono text-dim">{{ formatNumber(item.completionTokens) }}</td>
+              <td class="font-mono">{{ formatNumber(item.requestCount) }} 次</td>
               <td>
-                <span class="key-count-tag font-mono">🔑 {{ item.keyCount }} 个 Key</span>
+                <span class="badge badge-subtle font-mono">{{ item.keyCount }} 个 Key</span>
               </td>
-              <td class="text-muted font-mono" style="font-size: 12px;">
-                {{ formatTime(item.lastUsed) }}
-              </td>
+              <td class="font-mono text-dim text-sm">{{ formatTime(item.lastUsed) }}</td>
               <td style="text-align: right;">
-                <button class="btn btn-secondary btn-xs" @click="viewChannelKeys(item.channelId)">
+                <button class="btn btn-xs btn-primary-outline" @click="viewChannelKeys(item.channelId)">
                   查看 Key 明细 ➔
                 </button>
               </td>
@@ -161,26 +278,27 @@
         </table>
       </div>
 
-      <!-- 维度 2: 渠道 + Key 细分维度明细表格 -->
+      <!-- 维度 2: 渠道 + Key 细分明细表格 -->
       <div v-if="activeTab === 'key'" class="table-container">
         <table class="data-table">
           <thead>
             <tr>
               <th>所属渠道</th>
-              <th>分组</th>
-              <th>API Key (脱敏标识)</th>
+              <th>API Key (脱敏)</th>
+              <th>所属分组</th>
               <th>总 Token 消耗</th>
+              <th>预估费用 (¥ / $)</th>
               <th>Prompt (输入)</th>
               <th>Completion (输出)</th>
-              <th>请求次数</th>
+              <th>调用次数</th>
               <th>最近活跃时间</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="filteredKeyStats.length === 0">
-              <td colspan="8" class="empty-cell">
+              <td colspan="9" class="empty-cell">
                 <div class="empty-box">
-                  <span class="empty-icon">🔑</span>
+                  <span class="empty-icon">🔍</span>
                   <span>未找到匹配的 Key 消耗数据</span>
                 </div>
               </td>
@@ -188,31 +306,32 @@
             <tr v-for="(item, idx) in filteredKeyStats" :key="idx" class="data-row">
               <td class="font-bold">{{ item.channelName }}</td>
               <td>
-                <span :class="['badge', getGroupBadgeClass(item.group)]">
+                <div class="key-badge font-mono" @click="copyKey(item.maskedKey)" title="点击复制脱敏 Key">
+                  <span>🔑 {{ item.maskedKey }}</span>
+                  <span class="copy-icon">📋</span>
+                </div>
+              </td>
+              <td>
+                <span :class="['group-badge', getGroupBadgeClass(item.group)]">
                   {{ getGroupLabel(item.group) }}
                 </span>
               </td>
               <td>
-                <div class="key-chip">
-                  <span class="font-mono key-text">{{ item.maskedKey }}</span>
-                  <button 
-                    class="copy-mini-btn" 
-                    @click="copyKey(item.maskedKey)" 
-                    title="复制脱敏 Key 标识"
-                  >
-                    📋
-                  </button>
+                <div class="token-val font-mono">
+                  <strong>{{ formatNumber(item.totalTokens) }}</strong>
+                  <span class="token-pct text-dim">({{ getPercent(item.totalTokens, summary.totalTokens) }}%)</span>
                 </div>
               </td>
-              <td>
-                <span class="font-mono font-bold token-total-val">{{ formatNumber(item.totalTokens) }}</span>
+              <td class="font-mono">
+                <div class="cost-cell">
+                  <span class="cost-cny">¥{{ formatCurrency(item.costCny) }}</span>
+                  <span class="cost-usd text-dim">${{ formatCurrency(item.costUsd) }}</span>
+                </div>
               </td>
-              <td class="font-mono text-muted">{{ formatNumber(item.promptTokens) }}</td>
-              <td class="font-mono text-muted">{{ formatNumber(item.completionTokens) }}</td>
-              <td class="font-mono font-bold">{{ formatNumber(item.requestCount) }}</td>
-              <td class="text-muted font-mono" style="font-size: 12px;">
-                {{ formatTime(item.lastUsed) }}
-              </td>
+              <td class="font-mono text-dim">{{ formatNumber(item.promptTokens) }}</td>
+              <td class="font-mono text-dim">{{ formatNumber(item.completionTokens) }}</td>
+              <td class="font-mono">{{ formatNumber(item.requestCount) }} 次</td>
+              <td class="font-mono text-dim text-sm">{{ formatTime(item.lastUsed) }}</td>
             </tr>
           </tbody>
         </table>
@@ -222,27 +341,34 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { api } from '../api';
 
 const emit = defineEmits(['toast']);
 
-const activeTab = ref('channel');
 const loading = ref(false);
+const activeTab = ref('channel');
 const selectedChannelFilter = ref('');
 const searchKeyQuery = ref('');
+const trendDays = ref(7);
+const hoveredDay = ref(null);
 
 const summary = ref({
   totalTokens: 0,
   promptTokens: 0,
   completionTokens: 0,
   todayTokens: 0,
-  totalRequests: 0
+  totalRequests: 0,
+  totalCostUsd: 0,
+  totalCostCny: 0,
+  todayCostUsd: 0,
+  todayCostCny: 0
 });
 
 const channelStats = ref([]);
 const keyStats = ref([]);
-let pollTimer = null;
+const dailyStats = ref([]);
+const modelStats = ref([]);
 
 const channelList = computed(() => {
   return channelStats.value.map(c => ({
@@ -270,14 +396,18 @@ const filteredKeyStats = computed(() => {
 async function loadData() {
   loading.value = true;
   try {
-    const [sumData, chData, keyData] = await Promise.all([
+    const [sumData, chData, keyData, dailyData, modData] = await Promise.all([
       api.getTokenSummary(),
       api.getChannelTokenStats(),
-      api.getKeyTokenStats()
+      api.getKeyTokenStats(),
+      api.getDailyTokenStats(trendDays.value),
+      api.getModelTokenStats()
     ]);
     summary.value = sumData || summary.value;
     channelStats.value = chData || [];
     keyStats.value = keyData || [];
+    dailyStats.value = dailyData || [];
+    modelStats.value = modData || [];
   } catch (err) {
     console.error('加载 Token 统计失败:', err);
   } finally {
@@ -285,9 +415,53 @@ async function loadData() {
   }
 }
 
+async function changeTrendDays(days) {
+  trendDays.value = days;
+  try {
+    dailyStats.value = await api.getDailyTokenStats(days) || [];
+  } catch (err) {
+    console.error('获取趋势数据失败:', err);
+  }
+}
+
+function getBarHeight(tokens) {
+  if (!tokens || tokens <= 0 || dailyStats.value.length === 0) return '4px';
+  const maxTokens = Math.max(...dailyStats.value.map(d => d.totalTokens), 1);
+  const pct = Math.max(6, Math.min(100, Math.round((tokens / maxTokens) * 100)));
+  return `${pct}%`;
+}
+
+function formatDayLabel(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[1]}/${parts[2]}`;
+  }
+  return dateStr;
+}
+
+const GRADIENTS = [
+  'linear-gradient(90deg, #6366f1, #8b5cf6)',
+  'linear-gradient(90deg, #3b82f6, #06b6d4)',
+  'linear-gradient(90deg, #10b981, #34d399)',
+  'linear-gradient(90deg, #f59e0b, #fbbf24)',
+  'linear-gradient(90deg, #ec4899, #f43f5e)',
+  'linear-gradient(90deg, #8b5cf6, #d946ef)'
+];
+
+function getModelGradient(idx) {
+  return GRADIENTS[idx % GRADIENTS.length];
+}
+
 function viewChannelKeys(channelId) {
   selectedChannelFilter.value = channelId;
   activeTab.value = 'key';
+}
+
+function exportCsv() {
+  const url = api.getExportCsvUrl();
+  window.open(url, '_blank');
+  emit('toast', '📥 正在下载 Token 消耗 CSV 账单文件...', 'info');
 }
 
 async function confirmClear() {
@@ -314,6 +488,11 @@ async function copyKey(text) {
 function formatNumber(num) {
   if (num === null || num === undefined) return '0';
   return Number(num).toLocaleString();
+}
+
+function formatCurrency(val) {
+  if (val === null || val === undefined || isNaN(val)) return '0.00';
+  return Number(val).toFixed(2);
 }
 
 function getPercent(part, total) {
@@ -348,12 +527,6 @@ function formatTime(isoStr) {
 
 onMounted(() => {
   loadData();
-  // 5 秒自动平滑更新统计
-  pollTimer = setInterval(loadData, 5000);
-});
-
-onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer);
 });
 </script>
 
@@ -361,107 +534,326 @@ onUnmounted(() => {
 .token-stats-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
-/* 顶部 5 列 KPI 卡片网格 */
+/* 顶部 KPI 卡片网格 */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .kpi-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 16px;
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s, border-color 0.2s;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .kpi-card:hover {
   transform: translateY(-2px);
-  border-color: var(--border-focus);
+  border-color: var(--primary);
 }
 
 .highlight-card {
-  background: linear-gradient(135deg, rgba(137, 180, 250, 0.12), rgba(203, 166, 247, 0.08));
-  border-color: rgba(137, 180, 250, 0.35);
+  border-color: rgba(99, 102, 241, 0.4);
+  background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(99, 102, 241, 0.08) 100%);
+}
+
+.cost-card {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(245, 158, 11, 0.08) 100%);
 }
 
 .kpi-icon-box {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 20px;
   flex-shrink: 0;
 }
 
-.input-icon { background: rgba(137, 180, 250, 0.15); color: #89b4fa; }
-.output-icon { background: rgba(203, 166, 247, 0.15); color: #cba6f7; }
-.today-icon { background: rgba(166, 227, 161, 0.15); color: #a6e3a1; }
-.req-icon { background: rgba(249, 226, 175, 0.15); color: #f9e2af; }
+.cost-icon { background: rgba(245, 158, 11, 0.15); }
+.input-icon { background: rgba(59, 130, 246, 0.15); }
+.output-icon { background: rgba(16, 185, 129, 0.15); }
+.today-icon { background: rgba(236, 72, 153, 0.15); }
+.req-icon { background: rgba(139, 92, 246, 0.15); }
 
 .kpi-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   overflow: hidden;
 }
 
 .kpi-label {
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
-  font-weight: 500;
+  text-transform: uppercase;
 }
 
 .kpi-value {
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-main);
-  letter-spacing: -0.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin: 2px 0;
+}
+
+.text-cost {
+  color: #f59e0b;
 }
 
 .kpi-subtext {
   font-size: 11px;
   color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 主面板容器 */
-.stats-panel {
-  background: var(--bg-card);
+/* 趋势图与模型分布 */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-card, .models-card {
+  padding: 16px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.chart-header, .card-header-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chart-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-icon {
+  font-size: 16px;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.range-selector {
+  display: flex;
+  background: var(--bg-surface-2);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.range-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.range-btn.active {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.chart-body {
+  position: relative;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.bars-container {
+  display: flex;
+  align-items: flex-end;
+  height: 150px;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+
+.bar-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  cursor: pointer;
+}
+
+.bar-track {
+  width: 100%;
+  max-width: 28px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar-fill {
+  width: 100%;
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bar-col:hover .bar-fill {
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+}
+
+.bar-fill.has-data {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+}
+
+.bar-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: var(--shadow-md);
+}
+
+.tooltip-date {
+  font-weight: 700;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* 模型列表 */
+.models-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.model-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.model-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.model-name {
+  color: var(--text-main);
+  font-weight: 600;
+  max-width: 140px;
+}
+
+.model-tokens {
+  color: var(--text-muted);
+}
+
+.model-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-surface-2);
+  border-radius: 3px;
   overflow: hidden;
 }
 
+.model-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.model-cost {
+  font-size: 10px;
+}
+
+/* 面板与表格 */
+.stats-panel {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
 .panel-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle);
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .tabs-box {
   display: flex;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 4px;
-  border-radius: var(--radius-md);
-  gap: 4px;
+  background: var(--bg-surface-2);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
 }
 
 .dimension-tab {
@@ -469,24 +861,23 @@ onUnmounted(() => {
   border: none;
   color: var(--text-muted);
   font-size: 13px;
-  font-weight: 600;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .dimension-tab.active {
-  background: var(--accent-primary);
+  background: var(--primary);
   color: #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  font-weight: 600;
 }
 
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filter-item {
@@ -500,24 +891,20 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.filter-select {
-  height: 32px;
-  font-size: 12px;
-  padding: 4px 10px;
-  background: var(--bg-hover);
+.filter-select, .search-input {
+  background: var(--bg-surface-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-main);
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
 }
 
 .search-input {
-  height: 32px;
-  font-size: 12px;
-  padding: 4px 10px;
-  width: 170px;
+  width: 160px;
 }
 
-/* 数据表格 */
 .table-container {
   overflow-x: auto;
 }
@@ -530,155 +917,132 @@ onUnmounted(() => {
 }
 
 .data-table th {
-  background: rgba(255, 255, 255, 0.02);
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.15);
   color: var(--text-muted);
   font-weight: 600;
-  padding: 12px 18px;
   border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
 }
 
 .data-table td {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   vertical-align: middle;
 }
 
 .data-row:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.02);
 }
 
-.channel-name-cell {
-  color: var(--text-main);
-  font-size: 14px;
-}
-
-/* Token 进度柱状指示条 */
-.token-progress-cell {
+.channel-name-box {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-.mini-bar-bg {
-  width: 70px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+.channel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.group-badge {
+  font-size: 11px;
+  padding: 2px 6px;
   border-radius: 3px;
+}
+
+.badge-claude { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+.badge-codex { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.badge-all { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+.token-progress-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-surface-2);
+  border-radius: 2px;
   overflow: hidden;
 }
 
-.mini-bar-fill {
+.progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #89b4fa, #cba6f7);
-  border-radius: 3px;
-  transition: width 0.3s;
+  background: var(--primary);
+  border-radius: 2px;
 }
 
-.ratio-text {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  min-width: 38px;
+.cost-cell {
+  display: flex;
+  flex-direction: column;
 }
 
-.key-count-tag {
-  font-size: 11px;
-  background: rgba(255, 255, 255, 0.06);
-  padding: 3px 8px;
-  border-radius: 4px;
-  color: var(--text-muted);
-}
-
-.key-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
-  padding: 3px 8px;
-  border-radius: 4px;
-}
-
-.key-text {
-  font-size: 12px;
-  color: #f9e2af;
-}
-
-.copy-mini-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0 2px;
-  opacity: 0.7;
-}
-
-.copy-mini-btn:hover {
-  opacity: 1;
-}
-
-.token-total-val {
-  color: #89b4fa;
-  font-size: 14px;
-}
-
-/* 分组 Badge */
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+.cost-cny {
+  color: #f59e0b;
   font-weight: 600;
 }
 
-.badge-claude {
-  background: rgba(235, 160, 172, 0.18);
-  color: #eba0ac;
-  border: 1px solid rgba(235, 160, 172, 0.3);
+.cost-usd {
+  font-size: 11px;
 }
 
-.badge-codex {
-  background: rgba(166, 227, 161, 0.18);
-  color: #a6e3a1;
-  border: 1px solid rgba(166, 227, 161, 0.3);
+.key-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface-2);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
-.badge-all {
-  background: rgba(137, 180, 250, 0.18);
-  color: #89b4fa;
-  border: 1px solid rgba(137, 180, 250, 0.3);
+.key-badge:hover {
+  background: rgba(99, 102, 241, 0.15);
 }
 
 .empty-cell {
+  padding: 40px;
   text-align: center;
-  padding: 40px !important;
 }
 
 .empty-box {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--text-dim);
-  font-size: 14px;
 }
 
 .empty-icon {
-  font-size: 32px;
-}
-
-.btn-xs {
-  padding: 3px 8px;
-  font-size: 11px;
+  font-size: 24px;
 }
 
 .btn-danger-outline {
   background: transparent;
-  border: 1px solid rgba(243, 139, 168, 0.4);
-  color: #f38ba8;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
 .btn-danger-outline:hover:not(:disabled) {
-  background: rgba(243, 139, 168, 0.15);
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #f87171;
+}
+
+.btn-primary-outline {
+  background: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+
+.btn-primary-outline:hover {
+  background: var(--primary);
+  color: #fff;
 }
 </style>
