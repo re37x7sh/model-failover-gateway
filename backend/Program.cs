@@ -56,6 +56,12 @@ builder.Services.AddSingleton<TrayIconManager>();
 builder.Services.AddSingleton<IAlertService, AlertService>();
 builder.Services.AddSingleton<IProxyEngine, ProxyEngine>();
 
+// 3.1 注册大请求体高性能内存流池化管理器 (RecyclableMemoryStreamManager)
+builder.Services.AddSingleton<Microsoft.IO.RecyclableMemoryStreamManager>();
+
+// 3.2 注册主动探活与半开熔断恢复后台守护服务 (HealthCheckBackgroundService)
+builder.Services.AddHostedService<HealthCheckBackgroundService>();
+
 // 4. 允许跨域（方便开发调试与各种客户端调用）
 builder.Services.AddCors(options =>
 {

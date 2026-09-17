@@ -167,16 +167,31 @@ public class Channel
     public DateTime? CircuitBreakerUntilUtc { get; set; }
 
     /// <summary>
-    /// 当前是否处于智能熔断冷却中
+    /// 是否处于半开探活状态（由后台守护进程主动嗅探上游健康度，避免真实用户流量踩雷）
     /// </summary>
-    public bool IsCircuitBroken => CircuitBreakerUntilUtc.HasValue && CircuitBreakerUntilUtc.Value > DateTime.UtcNow;
+    public bool IsHalfOpen { get; set; } = false;
+
+    /// <summary>
+    /// 主动探活尝试次数（用于指数退避）
+    /// </summary>
+    public int ProbeAttemptCount { get; set; } = 0;
+
+    /// <summary>
+    /// 最近一次主动探活时间
+    /// </summary>
+    public DateTime? LastProbedAt { get; set; }
+
+    /// <summary>
+    /// 当前是否处于智能熔断冷却中（若正在半开探测中，亦视为冷却未完全就绪）
+    /// </summary>
+    public bool IsCircuitBroken => (CircuitBreakerUntilUtc.HasValue && CircuitBreakerUntilUtc.Value > DateTime.UtcNow) || IsHalfOpen;
 
     /// <summary>
     /// 剩余熔断冷却秒数
     /// </summary>
-    public int CircuitBreakerRemainingSeconds => IsCircuitBroken 
-        ? Math.Max(0, (int)Math.Ceiling((CircuitBreakerUntilUtc!.Value - DateTime.UtcNow).TotalSeconds)) 
-        : 0;
+    public int CircuitBreakerRemainingSeconds => CircuitBreakerUntilUtc.HasValue && CircuitBreakerUntilUtc.Value > DateTime.UtcNow
+        ? Math.Max(0, (int)Math.Ceiling((CircuitBreakerUntilUtc.Value - DateTime.UtcNow).TotalSeconds)) 
+        : (IsHalfOpen ? 1 : 0);
 
     /// <summary>
     /// 最近一次失败原因

@@ -59,11 +59,24 @@
       <div 
         v-for="(channel, index) in filteredChannels" 
         :key="channel.id" 
-        :class="['glass-card', 'channel-card', { disabled: !channel.isEnabled, primary: index === 0 && channel.isEnabled }]"
+        :class="['glass-card', 'channel-card', { 
+          disabled: !channel.isEnabled, 
+          primary: index === 0 && channel.isEnabled,
+          'is-dragging': draggedIndex === index,
+          'drag-target-over': dragOverIndex === index && draggedIndex !== index
+        }]"
+        draggable="true"
+        @dragstart="onCardDragStart($event, index)"
+        @dragover.prevent="onCardDragOver($event, index)"
+        @dragenter.prevent="onCardDragEnter($event, index)"
+        @dragleave="onCardDragLeave($event, index)"
+        @drop="onCardDrop($event, index)"
+        @dragend="onCardDragEnd"
       >
         <div class="card-left">
-          <!-- 优先级与排序调整 -->
-          <div class="priority-box">
+          <!-- 优先级与排序调整（带拖拽手柄） -->
+          <div class="priority-box" title="可鼠标按住拖拽整张卡片自由排序">
+            <span class="drag-grip-icon" title="按住拖拽自由排序">⋮⋮</span>
             <div class="priority-badge" :title="`优先级 #${channel.priority}`">
               <span class="priority-num">#{{ index + 1 }}</span>
               <span class="priority-label">{{ getPriorityLabel(index) }}</span>
@@ -109,8 +122,12 @@
                 🌐 代理: {{ channel.proxyUrl }}
               </span>
 
+              <!-- 半开主动探活中标签 -->
+              <span v-if="channel.isHalfOpen" class="badge badge-info font-mono half-open-badge" title="后台守护进程正在对该上游渠道发起轻量半开探活，探测成功将提前无感解除熔断并恢复健康">
+                🔄 半开主动探活中...
+              </span>
               <!-- 智能熔断冷却标签 -->
-              <span v-if="channel.isCircuitBroken" class="badge badge-warning font-mono" :title="`该渠道因连续报错已触发智能熔断冷却，剩余 ${channel.circuitBreakerRemainingSeconds} 秒`">
+              <span v-else-if="channel.isCircuitBroken" class="badge badge-warning font-mono" :title="`该渠道因连续报错已触发智能熔断冷却，剩余 ${channel.circuitBreakerRemainingSeconds} 秒`">
                 ⚡ 智能熔断冷却中 ({{ channel.circuitBreakerRemainingSeconds }}s)
               </span>
               <span v-else-if="channel.failCount > 0" class="badge badge-danger">
@@ -429,6 +446,16 @@
 <script setup>
 import { ref, reactive, computed } from 'vue';
 import { api } from '../api';
+import { currentLang, messages } from '../i18n';
+
+const t = (path) => {
+  const keys = path.split('.');
+  let cur = messages[currentLang.value] || messages.zh;
+  for (const k of keys) {
+    cur = cur?.[k];
+  }
+  return cur || path;
+};
 
 const props = defineProps({
   channels: {
@@ -444,6 +471,9 @@ const testResults = reactive({});
 const testingChannelId = ref(null);
 const testingAll = ref(false);
 const expandedFailures = reactive({});
+
+const draggedIndex = ref(null);
+const dragOverIndex = ref(null);
 
 function toggleFailureExpand(channelId) {
   expandedFailures[channelId] = !expandedFailures[channelId];
@@ -650,6 +680,63 @@ async function movePriority(currentIndex, direction) {
       emit('toast', `调整优先级失败: ${err.message}`, 'error');
     }
   }
+}
+
+// 自由卡片拖拽排序实现 (HTML5 Drag & Drop)
+function onCardDragStart(event, index) {
+  draggedIndex.value = index;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', index.toString());
+}
+
+function onCardDragOver(event, index) {
+  if (draggedIndex.value === null || draggedIndex.value === index) return;
+  dragOverIndex.value = index;
+}
+
+function onCardDragEnter(event, index) {
+  if (draggedIndex.value === null || draggedIndex.value === index) return;
+  dragOverIndex.value = index;
+}
+
+function onCardDragLeave(event, index) {
+  if (dragOverIndex.value === index) {
+    dragOverIndex.value = null;
+  }
+}
+
+async function onCardDrop(event, targetIndex) {
+  event.preventDefault();
+  const fromIndex = draggedIndex.value;
+  dragOverIndex.value = null;
+  draggedIndex.value = null;
+
+  if (fromIndex === null || fromIndex === targetIndex) return;
+
+  const newOrder = [...props.channels];
+  const itemA = filteredChannels.value[fromIndex];
+  const itemB = filteredChannels.value[targetIndex];
+  const idxA = newOrder.findIndex(c => c.id === itemA.id);
+  const idxB = newOrder.findIndex(c => c.id === itemB.id);
+
+  if (idxA !== -1 && idxB !== -1) {
+    const [moved] = newOrder.splice(idxA, 1);
+    newOrder.splice(idxB, 0, moved);
+
+    const orderedIds = newOrder.map(c => c.id);
+    try {
+      await api.reorderChannels(orderedIds);
+      emit('toast', `已调整优先级：[${itemA.name}] -> 第 ${targetIndex + 1} 位`, 'success');
+      emit('refresh');
+    } catch (err) {
+      emit('toast', `拖拽排序失败: ${err.message}`, 'error');
+    }
+  }
+}
+
+function onCardDragEnd() {
+  draggedIndex.value = null;
+  dragOverIndex.value = null;
 }
 
 async function toggleChannel(channel, event) {
@@ -1078,6 +1165,49 @@ async function confirmDelete(channel) {
   gap: 20px;
   min-width: 0;
   box-sizing: border-box;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  user-select: none;
+}
+
+.channel-card.is-dragging {
+  opacity: 0.35;
+  transform: scale(0.98);
+  border-style: dashed;
+}
+
+.channel-card.drag-target-over {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.35);
+  transform: translateY(-2px);
+}
+
+.drag-grip-icon {
+  cursor: grab;
+  color: var(--text-dim);
+  font-size: 16px;
+  letter-spacing: -2px;
+  padding: 4px 2px;
+  transition: color 0.15s;
+}
+
+.drag-grip-icon:hover {
+  color: var(--accent-primary);
+}
+
+.drag-grip-icon:active {
+  cursor: grabbing;
+}
+
+.half-open-badge {
+  animation: pulse-glow 2s infinite ease-in-out;
+  border: 1px solid #38bdf8 !important;
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(56, 189, 248, 0.2); }
+  50% { box-shadow: 0 0 12px rgba(56, 189, 248, 0.6); }
 }
 
 .channel-card.primary {
@@ -1093,7 +1223,7 @@ async function confirmDelete(channel) {
 .card-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   flex: 1;
   min-width: 0;
 }
@@ -1101,7 +1231,7 @@ async function confirmDelete(channel) {
 .priority-box {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 

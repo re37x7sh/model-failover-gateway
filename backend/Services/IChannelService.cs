@@ -18,4 +18,6 @@ public interface IChannelService
     Task<List<Channel>> ImportChannelsAsync(List<Channel> importedChannels, string mode = "append");
     Task MarkFailureAsync(string channelId, string reason);
     Task MarkSuccessAsync(string channelId);
+    Task<List<Channel>> GetChannelsNeedingProbeAsync();
+    Task<bool> ProbeAndRecoverChannelAsync(Channel channel, CancellationToken ct = default);
 }

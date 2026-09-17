@@ -461,9 +461,108 @@ public class ChannelService : IChannelService
                 channel.FailCount = 0;
                 channel.ConsecutiveFailures = 0;
                 channel.CircuitBreakerUntilUtc = null;
+                channel.IsHalfOpen = false;
+                channel.ProbeAttemptCount = 0;
                 channel.LastFailureReason = null;
                 channel.LastSuccessAt = DateTime.UtcNow;
                 channel.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 获取当前需要进行主动探活的熔断中渠道列表
+    /// </summary>
+    public async Task<List<Channel>> GetChannelsNeedingProbeAsync()
+    {
+        await _semaphore.WaitAsync();
+        try
+        {
+            var now = DateTime.UtcNow;
+            return _cachedChannels
+                .Where(c => c.IsEnabled && c.CircuitBreakerUntilUtc.HasValue)
+                .Where(c => 
+                {
+                    // 若剩余冷却秒数 <= 5 秒，或者已过期但此前尚未恢复，且未处于半开探活锁中
+                    var remaining = (c.CircuitBreakerUntilUtc!.Value - now).TotalSeconds;
+                    return remaining <= 5 && !c.IsHalfOpen;
+                })
+                .ToList();
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// 执行半开探活并在成功时无感自动恢复健康
+    /// </summary>
+    public async Task<bool> ProbeAndRecoverChannelAsync(Channel channel, CancellationToken ct = default)
+    {
+        // 1. 标记为半开探活状态
+        await _semaphore.WaitAsync(ct);
+        try
+        {
+            var target = _cachedChannels.FirstOrDefault(c => c.Id == channel.Id);
+            if (target == null || !target.IsEnabled) return false;
+            target.IsHalfOpen = true;
+            target.LastProbedAt = DateTime.UtcNow;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+
+        _logger.LogInformation("🔄 渠道 [{Name}] 触发半开主动探活，正在先行探测上游可用性...", channel.Name);
+
+        // 2. 发起轻量测试（不阻塞客户端业务流量）
+        var result = await TestChannelAsync(channel);
+
+        // 3. 处理探测结果
+        await _semaphore.WaitAsync(ct);
+        try
+        {
+            var target = _cachedChannels.FirstOrDefault(c => c.Id == channel.Id);
+            if (target == null) return false;
+
+            target.IsHalfOpen = false;
+
+            if (result.Success)
+            {
+                // 探活成功：半开 -> 恢复闭合（健康）
+                target.CircuitBreakerUntilUtc = null;
+                target.ConsecutiveFailures = 0;
+                target.FailCount = 0;
+                target.ProbeAttemptCount = 0;
+                target.LastFailureReason = null;
+                target.LastSuccessAt = DateTime.UtcNow;
+                target.UpdatedAt = DateTime.UtcNow;
+
+                _logger.LogInformation("✅ 渠道 [{Name}] 后台主动探活成功 ({Latency}ms)！已提前解除熔断并恢复为健康状态，用户业务无感。",
+                    target.Name, result.LatencyMs);
+                
+                SaveToFileInternal();
+                return true;
+            }
+            else
+            {
+                // 探活失败：按指数退避推迟下一次冷却解禁时间（30s, 60s, 120s, 最大 300s）
+                target.ProbeAttemptCount++;
+                var backoffSec = Math.Min(300, 30 * (int)Math.Pow(2, Math.Min(3, target.ProbeAttemptCount - 1)));
+                target.CircuitBreakerUntilUtc = DateTime.UtcNow.AddSeconds(backoffSec);
+                target.LastFailureReason = $"[主动探活未通过 #{target.ProbeAttemptCount}] {result.Message}";
+                target.UpdatedAt = DateTime.UtcNow;
+
+                _logger.LogWarning("⚠️ 渠道 [{Name}] 主动探活仍未就绪: {Message}，已按指数退避推迟冷却 {Seconds} 秒",
+                    target.Name, result.Message, backoffSec);
+
+                SaveToFileInternal();
+                return false;
             }
         }
         finally

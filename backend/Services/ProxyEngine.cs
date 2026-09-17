@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.IO;
 using ModelFailoverGateway.Models;
 
 namespace ModelFailoverGateway.Services;
@@ -19,6 +20,7 @@ public class ProxyEngine : IProxyEngine
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<ProxyEngine> _logger;
+    private readonly RecyclableMemoryStreamManager _streamManager;
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HttpClient> _proxyClients = new();
 
@@ -37,7 +39,8 @@ public class ProxyEngine : IProxyEngine
         IAlertService alertService,
         IHttpClientFactory httpClientFactory,
         IWebHostEnvironment env,
-        ILogger<ProxyEngine> logger)
+        ILogger<ProxyEngine> logger,
+        RecyclableMemoryStreamManager streamManager)
     {
         _channelService = channelService;
         _logService = logService;
@@ -46,6 +49,7 @@ public class ProxyEngine : IProxyEngine
         _httpClientFactory = httpClientFactory;
         _env = env;
         _logger = logger;
+        _streamManager = streamManager;
     }
 
     private GatewaySettings GetGatewaySettings()
@@ -351,11 +355,11 @@ public class ProxyEngine : IProxyEngine
             return;
         }
 
-        // 1. 读取并缓存客户端原始请求体字节（为了在失败重试时可以重复向不同渠道发送）
+        // 1. 读取并缓存客户端原始请求体字节（使用 RecyclableMemoryStream 内存池化管理，消除 LOH 堆碎片与 GC 停顿）
         context.Request.EnableBuffering();
-        using var memoryStream = new MemoryStream();
+        using var memoryStream = _streamManager.GetStream("gateway-request-body");
         await context.Request.Body.CopyToAsync(memoryStream);
-        var rawRequestBody = memoryStream.ToArray();
+        var rawRequestBody = memoryStream.GetBuffer().AsSpan(0, (int)memoryStream.Length).ToArray();
 
         // 1.1 自动剔除请求体中的加密推理数据（encrypted_content），避免跨渠道/跨账号报 invalid_encrypted_content
         if (gatewaySettings.StripEncryptedContent && rawRequestBody.Length > 0)

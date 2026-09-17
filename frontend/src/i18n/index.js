@@ -68,7 +68,30 @@ export const messages = {
       group: '所属分组',
       baseUrl: '接口 Base URL',
       name: '渠道名称',
-      dragTip: '提示：可直接拖拽卡片调整渠道优先级排序'
+      dragTip: '提示：可直接拖拽卡片调整渠道优先级排序',
+      recentError: '最近报错',
+      expand: '展开',
+      collapse: '收起',
+      copySuccess: '已复制到剪贴板',
+      batchTest: '批量探测连通性',
+      batchTesting: '正在测试...',
+      exportBackup: '备份导出',
+      importConfig: '导入配置',
+      cloneChannel: '克隆渠道',
+      cloning: '克隆中...',
+      probe: '探测',
+      probing: '探测中...',
+      edit: '编辑',
+      delete: '删除',
+      enabled: '已启用',
+      disabled: '已停用',
+      circuitBreaker: '智能熔断冷却中',
+      halfOpen: '半开主动探活中',
+      consecutiveFailures: '连续失败',
+      localEndpoint: '本地调用 Base URL',
+      upstreamBaseUrl: '上游服务 Base URL',
+      matchingModels: '匹配模型',
+      dragReorderTip: '可直接鼠标拖拽卡片调整优先级顺序'
     },
     // Token 统计
     tokens: {
@@ -95,7 +118,13 @@ export const messages = {
       lastActive: '最近活跃时间',
       viewKeys: '查看 Key 明细 ➔',
       empty: '暂无 Token 消耗数据。发送请求后将实时自动统计！',
-      emptyKey: '未找到匹配的 Key 消耗数据'
+      emptyKey: '未找到匹配的 Key 消耗数据',
+      pricingSettings: '⚙️ 计费与汇率设置',
+      exchangeRate: 'USD 转 CNY 汇率',
+      discountRate: '中转充值折扣倍率 (例如 0.7 折填 0.70)',
+      customModelRates: '模型单价自定义覆盖 (每 1M Tokens)',
+      saveSettings: '💾 保存设置',
+      resetDefault: '🔄 恢复默认'
     },
     // 日志
     logs: {
@@ -217,7 +246,30 @@ export const messages = {
       group: 'Target Group',
       baseUrl: 'Base URL',
       name: 'Channel Name',
-      dragTip: 'Tip: Drag channel cards to reorder failover priority'
+      dragTip: 'Tip: Drag channel cards to reorder failover priority',
+      recentError: 'Recent Error',
+      expand: 'Expand',
+      collapse: 'Collapse',
+      copySuccess: 'Copied to clipboard',
+      batchTest: 'Batch Probe',
+      batchTesting: 'Probing...',
+      exportBackup: 'Export Config',
+      importConfig: 'Import Config',
+      cloneChannel: 'Clone Channel',
+      cloning: 'Cloning...',
+      probe: 'Probe',
+      probing: 'Probing...',
+      edit: 'Edit',
+      delete: 'Delete',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      circuitBreaker: 'Circuit Broken',
+      halfOpen: 'Half-Open Probing',
+      consecutiveFailures: 'Failures',
+      localEndpoint: 'Local Base URL',
+      upstreamBaseUrl: 'Upstream Base URL',
+      matchingModels: 'Models',
+      dragReorderTip: 'Drag cards directly to adjust priority'
     },
     // Token Stats
     tokens: {
@@ -244,7 +296,13 @@ export const messages = {
       lastActive: 'Last Active',
       viewKeys: 'View Keys ➔',
       empty: 'No token usage data yet. It will be recorded automatically when requests arrive!',
-      emptyKey: 'No matching Key usage data found'
+      emptyKey: 'No matching Key usage data found',
+      pricingSettings: '⚙️ Pricing & Rates',
+      exchangeRate: 'USD to CNY Exchange Rate',
+      discountRate: 'Billing Discount Rate (e.g. 0.70 for 30% off)',
+      customModelRates: 'Custom Model Pricing (per 1M Tokens)',
+      saveSettings: '💾 Save Settings',
+      resetDefault: '🔄 Reset Defaults'
     },
     // Logs
     logs: {

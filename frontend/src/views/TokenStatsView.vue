@@ -14,9 +14,14 @@
       <div class="kpi-card cost-card">
         <div class="kpi-icon-box cost-icon">💰</div>
         <div class="kpi-content">
-          <div class="kpi-label">预估总支出 (Total Cost)</div>
-          <div class="kpi-value font-mono text-cost">¥{{ formatCurrency(summary.totalCostCny) }}</div>
-          <div class="kpi-subtext font-mono">${{ formatCurrency(summary.totalCostUsd) }} USD (参考汇率 7.25)</div>
+          <div class="kpi-label">
+            <span>预估总支出 (Total Cost)</span>
+            <span v-if="pricingConfig.discountRate !== 1.0" class="badge badge-warning text-xs font-mono" style="margin-left: 6px;">
+              {{ pricingConfig.discountRate < 1 ? (pricingConfig.discountRate * 10).toFixed(1) + '折优惠' : pricingConfig.discountRate + '倍费率' }}
+            </span>
+          </div>
+          <div class="kpi-value font-mono text-cost">¥{{ formatCurrency(adjustedTotalCostCny) }}</div>
+          <div class="kpi-subtext font-mono">${{ formatCurrency(adjustedTotalCostUsd) }} USD (汇率 {{ pricingConfig.exchangeRate }})</div>
         </div>
       </div>
 
@@ -43,7 +48,7 @@
         <div class="kpi-content">
           <div class="kpi-label">今日消耗 (Today)</div>
           <div class="kpi-value font-mono text-success">{{ formatNumber(summary.todayTokens) }}</div>
-          <div class="kpi-subtext">今日预估 ¥{{ formatCurrency(summary.todayCostCny) }} (${{ formatCurrency(summary.todayCostUsd) }})</div>
+          <div class="kpi-subtext">今日预估 ¥{{ formatCurrency(adjustedTodayCostCny) }} (${{ formatCurrency(adjustedTodayCostUsd) }})</div>
         </div>
       </div>
 
@@ -206,7 +211,13 @@
           <button class="btn btn-secondary btn-sm" @click="loadData" :disabled="loading">
             <span>🔄 刷新</span>
           </button>
-          <button class="btn btn-secondary btn-sm" @click="exportCsv" :disabled="summary.totalTokens === 0">
+          <button class="btn btn-secondary btn-sm" @click="openPricingModal" title="自定义 USD 汇率与中转折扣倍率">
+            <span>⚙️ 计费与汇率设置</span>
+            <span v-if="pricingConfig.discountRate !== 1.0" class="badge badge-warning text-xs font-mono" style="margin-left: 4px;">
+              {{ pricingConfig.discountRate < 1 ? (pricingConfig.discountRate * 10).toFixed(1) + '折' : pricingConfig.discountRate + 'x' }}
+            </span>
+          </button>
+          <button class="btn btn-secondary btn-sm" @click="exportCsv" :disabled="summary.totalTokens === 0" title="导出全量 Token 消耗明细 CSV 报表">
             <span>📥 导出 CSV 账单</span>
           </button>
           <button class="btn btn-danger-outline btn-sm" @click="confirmClear" :disabled="summary.totalTokens === 0">
@@ -266,8 +277,8 @@
               </td>
               <td class="font-mono">
                 <div class="cost-cell">
-                  <span class="cost-cny">¥{{ formatCurrency(item.costCny) }}</span>
-                  <span class="cost-usd text-dim">${{ formatCurrency(item.costUsd) }}</span>
+                  <span class="cost-cny">¥{{ formatCurrency(getItemCostCny(item.costUsd)) }}</span>
+                  <span class="cost-usd text-dim">${{ formatCurrency(getItemCostUsd(item.costUsd)) }}</span>
                 </div>
               </td>
               <td class="font-mono text-dim">{{ formatNumber(item.promptTokens) }}</td>
@@ -333,8 +344,8 @@
               </td>
               <td class="font-mono">
                 <div class="cost-cell">
-                  <span class="cost-cny">¥{{ formatCurrency(item.costCny) }}</span>
-                  <span class="cost-usd text-dim">${{ formatCurrency(item.costUsd) }}</span>
+                  <span class="cost-cny">¥{{ formatCurrency(getItemCostCny(item.costUsd)) }}</span>
+                  <span class="cost-usd text-dim">${{ formatCurrency(getItemCostUsd(item.costUsd)) }}</span>
                 </div>
               </td>
               <td class="font-mono text-dim">{{ formatNumber(item.promptTokens) }}</td>
@@ -344,6 +355,70 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- 自定义计费单价与汇率配置 Modal -->
+    <div v-if="showPricingModal" class="modal-overlay" @click.self="showPricingModal = false">
+      <div class="glass-card modal-container">
+        <div class="modal-header">
+          <h3 class="modal-title">⚙️ Token 计费单价与汇率自定义配置</h3>
+          <button class="close-btn" @click="showPricingModal = false">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">USD 转 CNY 结算汇率</label>
+            <input 
+              v-model.number="tempPricingConfig.exchangeRate" 
+              type="number" 
+              step="0.01" 
+              min="1" 
+              max="20"
+              class="form-input font-mono" 
+              placeholder="默认 7.25" 
+            />
+            <span class="form-tip">💡 提示：用于将大模型官方的美元定价折算为人民币总额展示。</span>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label-row">
+              <label class="form-label">中转站充值折扣倍率</label>
+              <div class="preset-badge-group">
+                <button type="button" class="btn-xs btn-preset" @click="tempPricingConfig.discountRate = 1.0">原价 (1.0)</button>
+                <button type="button" class="btn-xs btn-preset" @click="tempPricingConfig.discountRate = 0.8">8折 (0.80)</button>
+                <button type="button" class="btn-xs btn-preset" @click="tempPricingConfig.discountRate = 0.7">7折 (0.70)</button>
+                <button type="button" class="btn-xs btn-preset" @click="tempPricingConfig.discountRate = 0.5">5折 (0.50)</button>
+                <button type="button" class="btn-xs btn-preset" @click="tempPricingConfig.discountRate = 0.3">3折 (0.30)</button>
+              </div>
+            </div>
+            <input 
+              v-model.number="tempPricingConfig.discountRate" 
+              type="number" 
+              step="0.05" 
+              min="0.01" 
+              max="10"
+              class="form-input font-mono" 
+              placeholder="例如 0.70 代表中转站 7 折" 
+            />
+            <span class="form-tip">💡 提示：许多第三方中转站充值存在优惠（如充 100 得 140 相当于 0.71 折）。填写此项后，看板上所有总金额、渠道及 Key 明细费用均将按此折率实时换算，与您的真实中转站余额消耗 100% 吻合！</span>
+          </div>
+
+          <div class="group-endpoint-preview">
+            <div class="preview-title">📊 实时换算公式预览：</div>
+            <div class="preview-row font-mono" style="font-size: 12px; color: var(--text-main);">
+              折后实付 = 官方原价 × {{ tempPricingConfig.discountRate }} ({{ tempPricingConfig.discountRate < 1 ? (tempPricingConfig.discountRate * 10).toFixed(1) + '折' : tempPricingConfig.discountRate + '倍' }}) × {{ tempPricingConfig.exchangeRate }} (汇率)
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="resetPricingDefault">🔄 恢复默认官方定价</button>
+            <div class="footer-right-actions">
+              <button type="button" class="btn btn-secondary" @click="showPricingModal = false">取消</button>
+              <button type="button" class="btn btn-primary" @click="savePricingConfig">💾 保存并即时重算</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -361,6 +436,73 @@ const selectedChannelFilter = ref('');
 const searchKeyQuery = ref('');
 const trendDays = ref(7);
 const hoveredDay = ref(null);
+
+// 自定义计费与汇率配置 (持久化于 LocalStorage)
+const showPricingModal = ref(false);
+const defaultPricing = {
+  exchangeRate: 7.25,
+  discountRate: 1.0
+};
+
+const pricingConfig = ref(loadPricingConfig());
+const tempPricingConfig = reactive({ ...pricingConfig.value });
+
+function loadPricingConfig() {
+  try {
+    const raw = localStorage.getItem('token_pricing_config');
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return { ...defaultPricing };
+}
+
+function openPricingModal() {
+  Object.assign(tempPricingConfig, pricingConfig.value);
+  showPricingModal.value = true;
+}
+
+function savePricingConfig() {
+  pricingConfig.value = {
+    exchangeRate: Number(tempPricingConfig.exchangeRate) || 7.25,
+    discountRate: Number(tempPricingConfig.discountRate) || 1.0
+  };
+  localStorage.setItem('token_pricing_config', JSON.stringify(pricingConfig.value));
+  showPricingModal.value = false;
+  emit('toast', '计费单价与汇率配置已生效，已实时刷新看板金额', 'success');
+}
+
+function resetPricingDefault() {
+  Object.assign(tempPricingConfig, defaultPricing);
+  pricingConfig.value = { ...defaultPricing };
+  localStorage.removeItem('token_pricing_config');
+  showPricingModal.value = false;
+  emit('toast', '已恢复为官方标准定价与基准汇率 (7.25)', 'info');
+}
+
+const adjustedTotalCostUsd = computed(() => {
+  return (summary.value.totalCostUsd || 0) * (pricingConfig.value.discountRate || 1.0);
+});
+
+const adjustedTotalCostCny = computed(() => {
+  return (summary.value.totalCostUsd || 0) * (pricingConfig.value.discountRate || 1.0) * (pricingConfig.value.exchangeRate || 7.25);
+});
+
+const adjustedTodayCostUsd = computed(() => {
+  return (summary.value.todayCostUsd || 0) * (pricingConfig.value.discountRate || 1.0);
+});
+
+const adjustedTodayCostCny = computed(() => {
+  return (summary.value.todayCostUsd || 0) * (pricingConfig.value.discountRate || 1.0) * (pricingConfig.value.exchangeRate || 7.25);
+});
+
+function getItemCostCny(costUsd) {
+  return (costUsd || 0) * (pricingConfig.value.discountRate || 1.0) * (pricingConfig.value.exchangeRate || 7.25);
+}
+
+function getItemCostUsd(costUsd) {
+  return (costUsd || 0) * (pricingConfig.value.discountRate || 1.0);
+}
 
 const summary = ref({
   totalTokens: 0,

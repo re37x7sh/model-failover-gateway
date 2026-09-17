@@ -148,7 +148,11 @@
               </tr>
             </thead>
             <tbody>
-              <template v-for="log in pagedLogs" :key="log.id">
+              <!-- 虚拟滚动顶部垫高占位 -->
+              <tr v-if="virtualRange.paddingTop > 0" :style="{ height: `${virtualRange.paddingTop}px` }">
+                <td colspan="8" style="padding: 0; border: none;"></td>
+              </tr>
+              <template v-for="log in visibleLogs" :key="log.id">
                 <tr 
                   :class="['data-row', { 
                     'is-expanded': expandedRows[log.id], 
@@ -339,6 +343,10 @@
                   </td>
                 </tr>
               </template>
+              <!-- 虚拟滚动底部垫高占位 -->
+              <tr v-if="virtualRange.paddingBottom > 0" :style="{ height: `${virtualRange.paddingBottom}px` }">
+                <td colspan="8" style="padding: 0; border: none;"></td>
+              </tr>
             </tbody>
           </table>
 
@@ -362,6 +370,9 @@
         <div class="scroll-footer-bar">
           <div class="scroll-footer-left">
             <span>已动态展示 <strong class="text-primary font-mono">{{ pagedLogs.length }}</strong> / 共 <strong class="font-mono">{{ totalCount }}</strong> 条请求日志</span>
+            <span v-if="isVirtualScrollActive" class="badge badge-info font-mono" style="font-size: 10.5px; padding: 1px 6px;" title="虚拟滚动引擎：仅渲染视口切片节点，杜绝海量日志卡顿">
+              ⚡ 虚拟渲染已加速 (渲染 {{ visibleLogs.length }}/{{ pagedLogs.length }} 项)
+            </span>
             <span v-if="loadingMore" class="badge badge-pending font-mono">加载中...</span>
             <span class="scroll-hint-tip">💡 默认展示 15 条，向下滑动仅在框选区域内局部滚动并动态加载</span>
           </div>
@@ -523,6 +534,45 @@ const pageSize = ref(15); // 默认展示 15 条数据
 const loading = ref(false);
 const loadingMore = ref(false);
 const tableScrollViewportRef = ref(null);
+
+// 虚拟滚动引擎状态 (Virtual Scroll Windowing)
+const scrollTop = ref(0);
+const viewportHeight = ref(600);
+const rowHeight = 52;
+const bufferCount = 6;
+
+const isVirtualScrollActive = computed(() => pagedLogs.value.length > 25);
+
+const virtualRange = computed(() => {
+  if (!isVirtualScrollActive.value) {
+    return {
+      startIndex: 0,
+      endIndex: pagedLogs.value.length,
+      paddingTop: 0,
+      paddingBottom: 0
+    };
+  }
+
+  const start = Math.max(0, Math.floor(scrollTop.value / rowHeight) - bufferCount);
+  const end = Math.min(
+    pagedLogs.value.length,
+    Math.ceil((scrollTop.value + viewportHeight.value) / rowHeight) + bufferCount
+  );
+
+  return {
+    startIndex: start,
+    endIndex: end,
+    paddingTop: start * rowHeight,
+    paddingBottom: Math.max(0, (pagedLogs.value.length - end) * rowHeight)
+  };
+});
+
+const visibleLogs = computed(() => {
+  if (!isVirtualScrollActive.value) {
+    return pagedLogs.value;
+  }
+  return pagedLogs.value.slice(virtualRange.value.startIndex, virtualRange.value.endIndex);
+});
 
 const currentFilter = ref('all');
 const searchKeyword = ref('');
@@ -705,9 +755,12 @@ async function loadMoreLogs() {
   }
 }
 
-// 监听框选区域的独立滚动（触底自动动态加载）
+// 监听框选区域的独立滚动（触底自动动态加载 + 虚拟滚动切片）
 function handleTableScroll(e) {
   const el = e.target;
+  scrollTop.value = el.scrollTop;
+  viewportHeight.value = el.clientHeight || 600;
+
   // 当向下滑动距离底部小于等于 80px 时自动预加载下一批
   if (el.scrollHeight - el.scrollTop - el.clientHeight <= 80) {
     if (pagedLogs.value.length < totalCount.value && !loadingMore.value && !loading.value) {
