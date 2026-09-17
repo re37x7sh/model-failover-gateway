@@ -1,357 +1,432 @@
 <template>
   <div class="logs-page">
-    <!-- 1. 顶部数据指标看板卡片 -->
-    <div class="metrics-grid">
-      <div class="metric-card glass-card">
-        <div class="metric-header">
-          <span class="metric-label">总请求调用</span>
-          <span class="metric-icon">📊</span>
-        </div>
-        <div class="metric-value font-mono">{{ totalCount }}</div>
-        <div class="metric-footer text-dim">历史总调度链路记录</div>
-      </div>
+    <!-- 0. 顶部视图双模切换：模型请求流水 vs 后端服务运行日志 -->
+    <div class="view-mode-tabs">
+      <button 
+        :class="['mode-tab-btn', { active: activeViewMode === 'requests' }]" 
+        @click="switchToRequests"
+      >
+        <span class="tab-ico">📋</span>
+        <span>模型请求与全链路追踪</span>
+        <span class="tab-badge-num font-mono">{{ summaryMetrics.totalRequests || totalCount }}</span>
+      </button>
 
-      <div class="metric-card glass-card">
-        <div class="metric-header">
-          <span class="metric-label">正在进行中 (PENDING)</span>
-          <span class="pulse-indicator pulse-blue"></span>
-        </div>
-        <div class="metric-value text-info font-mono">{{ pendingCount }}</div>
-        <div class="metric-footer text-dim">长推理/流式传输中任务</div>
-      </div>
-
-      <div class="metric-card glass-card">
-        <div class="metric-header">
-          <span class="metric-label">成功请求</span>
-          <span class="metric-icon">✅</span>
-        </div>
-        <div class="metric-value text-success font-mono">{{ successCount }}</div>
-        <div class="metric-footer text-dim">成功率 {{ calcRate }}%</div>
-      </div>
-
-      <div class="metric-card glass-card">
-        <div class="metric-header">
-          <span class="metric-label">失败 / 救急切换</span>
-          <span class="metric-icon">🚨</span>
-        </div>
-        <div class="metric-value text-danger font-mono">{{ failoverCount }}</div>
-        <div class="metric-footer text-dim">已自动完成备用重试</div>
-      </div>
+      <button 
+        :class="['mode-tab-btn', { active: activeViewMode === 'system' }]" 
+        @click="switchToSysLogs"
+      >
+        <span class="tab-ico">💻</span>
+        <span>后端服务运行日志 (Console)</span>
+        <span class="pulse-indicator pulse-green" style="width: 6px; height: 6px;"></span>
+      </button>
     </div>
 
-    <!-- 2. 工具操作栏 (过滤胶囊 + 搜索框 + 自动刷新) -->
-    <div class="action-toolbar glass-card">
-      <!-- 状态过滤胶囊 Tab -->
-      <div class="status-tabs">
-        <button 
-          v-for="tab in filterTabs" 
-          :key="tab.id"
-          :class="['status-tab-btn', { active: currentFilter === tab.id }]"
-          @click="onFilterChange(tab.id)"
-        >
-          <span>{{ tab.label }}</span>
-          <span v-if="tab.count !== undefined" class="tab-count-pill">{{ tab.count }}</span>
-        </button>
-      </div>
-
-      <!-- 搜索与操作按钮 -->
-      <div class="toolbar-right-tools">
-        <div class="search-input-wrapper">
-          <span class="search-ico">🔍</span>
-          <input 
-            v-model="searchKeyword" 
-            @input="onSearchInput" 
-            class="search-field font-mono" 
-            placeholder="搜索路径/模型/渠道/请求体/报错..."
-          />
-          <button v-if="searchKeyword" class="search-clear-btn" @click="clearSearch">✕</button>
+    <!-- ================= 模式 1: 模型请求流水与全链路追踪 ================= -->
+    <div v-if="activeViewMode === 'requests'" class="requests-view-wrapper">
+      <!-- 1. 顶部数据指标看板卡片 -->
+      <div class="metrics-grid">
+        <div class="metric-card glass-card">
+          <div class="metric-header">
+            <span class="metric-label">总请求调用</span>
+            <span class="metric-icon">📊</span>
+          </div>
+          <div class="metric-value font-mono">{{ summaryMetrics.totalRequests || totalCount }}</div>
+          <div class="metric-footer text-dim">历史总调度链路记录</div>
         </div>
 
-        <button 
-          :class="['btn', autoRefresh ? 'btn-primary' : 'btn-secondary', 'btn-sm']" 
-          @click="toggleAutoRefresh"
-          :title="autoRefresh ? '暂停每 2 秒自动同步' : '开启每 2 秒自动同步'"
-        >
-          <span :class="['pulse-indicator', autoRefresh ? 'pulse-green' : '']" style="width: 6px; height: 6px;"></span>
-          <span>{{ autoRefresh ? '自动刷新 (2s)' : '已暂停' }}</span>
-        </button>
+        <div class="metric-card glass-card">
+          <div class="metric-header">
+            <span class="metric-label">正在进行中 (PENDING)</span>
+            <span class="pulse-indicator pulse-blue"></span>
+          </div>
+          <div class="metric-value text-info font-mono">{{ pendingCount }}</div>
+          <div class="metric-footer text-dim">长推理/流式传输中任务</div>
+        </div>
 
-        <button class="btn btn-secondary btn-sm" @click="fetchLogs" :disabled="loading">
-          <span>🔄 刷新</span>
-        </button>
+        <div class="metric-card glass-card">
+          <div class="metric-header">
+            <span class="metric-label">成功请求</span>
+            <span class="metric-icon">✅</span>
+          </div>
+          <div class="metric-value text-success font-mono">{{ successCount }}</div>
+          <div class="metric-footer text-dim">成功率 {{ calcRate }}%</div>
+        </div>
 
-        <button class="btn btn-secondary btn-sm" @click="showSettingsModal = true">
-          <span>⚙️ 策略</span>
-        </button>
-
-        <button class="btn btn-danger btn-sm" @click="clearLogs">
-          <span>🗑️ 清空</span>
-        </button>
+        <div class="metric-card glass-card">
+          <div class="metric-header">
+            <span class="metric-label">失败 / 救急切换</span>
+            <span class="metric-icon">🚨</span>
+          </div>
+          <div class="metric-value text-danger font-mono">{{ failoverCount }}</div>
+          <div class="metric-footer text-dim">已自动完成备用重试 ({{ summaryMetrics.totalFailovers }} 次)</div>
+        </div>
       </div>
-    </div>
 
-    <!-- 3. 日志列表表格区 -->
-    <div v-if="loading && pagedLogs.length === 0" class="glass-card state-box">
-      <div class="loading-ring"></div>
-      <div class="state-title">正在实时同步请求链路日志...</div>
-    </div>
+      <!-- 2. 工具操作栏 (过滤胶囊 + 搜索框 + 自动刷新) -->
+      <div class="action-toolbar glass-card">
+        <!-- 状态过滤胶囊 Tab -->
+        <div class="status-tabs">
+          <button 
+            v-for="tab in filterTabs" 
+            :key="tab.id"
+            :class="['status-tab-btn', { active: currentFilter === tab.id }]"
+            @click="onFilterChange(tab.id)"
+          >
+            <span>{{ tab.label }}</span>
+          </button>
+        </div>
 
-    <div v-else-if="pagedLogs.length === 0" class="glass-card state-box">
-      <span class="state-icon">📋</span>
-      <div class="state-title">
-        <span v-if="searchKeyword">未检索到包含 "{{ searchKeyword }}" 的相关记录</span>
-        <span v-else>当前筛选分类下暂无请求记录</span>
+        <!-- 搜索与操作按钮 -->
+        <div class="toolbar-right-tools">
+          <div class="search-input-wrapper">
+            <span class="search-ico">🔍</span>
+            <input 
+              v-model="searchKeyword" 
+              @input="onSearchInput" 
+              class="search-field font-mono" 
+              placeholder="搜索路径/模型/渠道/请求体/报错..."
+            />
+            <button v-if="searchKeyword" class="search-clear-btn" @click="clearSearch">✕</button>
+          </div>
+
+          <button 
+            :class="['btn', autoRefresh ? 'btn-primary' : 'btn-secondary', 'btn-sm']" 
+            @click="toggleAutoRefresh"
+            :title="autoRefresh ? '暂停每 2 秒自动同步' : '开启每 2 秒自动同步'"
+          >
+            <span :class="['pulse-indicator', autoRefresh ? 'pulse-green' : '']" style="width: 6px; height: 6px;"></span>
+            <span>{{ autoRefresh ? '自动刷新 (2s)' : '已暂停' }}</span>
+          </button>
+
+          <button class="btn btn-secondary btn-sm" @click="fetchLogs" :disabled="loading">
+            <span>🔄 刷新</span>
+          </button>
+
+          <button class="btn btn-secondary btn-sm" @click="showSettingsModal = true">
+            <span>⚙️ 策略</span>
+          </button>
+
+          <button class="btn btn-danger btn-sm" @click="clearLogs">
+            <span>🗑️ 清空</span>
+          </button>
+        </div>
       </div>
-      <p class="state-desc">在客户端或沙箱中发起模型请求后，此处将实时展示完整的调度轨迹与请求载荷。</p>
-    </div>
 
-    <div v-else class="logs-container glass-card">
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th style="width: 100px;">请求状态</th>
-              <th style="width: 110px;">发起时间</th>
-              <th>端点路由</th>
-              <th>请求模型</th>
-              <th>故障转移调度链路</th>
-              <th>最终渠道</th>
-              <th style="width: 90px;">耗时 / Tokens</th>
-              <th style="width: 100px; text-align: right;">载荷与诊断</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-for="log in pagedLogs" :key="log.id">
-              <tr 
-                :class="['data-row', { 
-                  'is-expanded': expandedRows[log.id], 
-                  'row-failover': log.isFailover, 
-                  'row-error': log.status === 'FAILED' || log.statusCode >= 400,
-                  'row-pending': log.status === 'PENDING'
-                }]"
-                @click="toggleExpand(log.id)"
-              >
-                <!-- 状态徽章 -->
-                <td>
-                  <span v-if="log.status === 'PENDING'" class="badge badge-pending">
-                    <span class="pulse-indicator pulse-blue"></span> 运行中
-                  </span>
-                  <span v-else-if="log.status === 'SUCCESS' || (log.statusCode >= 200 && log.statusCode < 400 && log.status !== 'FAILED')" class="badge badge-success">
-                    {{ log.statusCode }} 成功
-                  </span>
-                  <span v-else class="badge badge-danger">
-                    {{ log.statusCode > 0 ? log.statusCode : 'ERR' }} 失败
-                  </span>
-                </td>
+      <!-- 3. 日志列表表格区 -->
+      <div v-if="loading && pagedLogs.length === 0" class="glass-card state-box">
+        <div class="loading-ring"></div>
+        <div class="state-title">正在实时同步请求链路日志...</div>
+      </div>
 
-                <!-- 时间戳 -->
-                <td class="font-mono text-dim" style="font-size: 12px;">
-                  {{ formatTime(log.timestamp) }}
-                </td>
+      <div v-else-if="pagedLogs.length === 0" class="glass-card state-box">
+        <span class="state-icon">📋</span>
+        <div class="state-title">
+          <span v-if="searchKeyword">未检索到包含 "{{ searchKeyword }}" 的相关记录</span>
+          <span v-else>当前筛选分类下暂无请求记录</span>
+        </div>
+        <p class="state-desc">在客户端或沙箱中发起模型请求后，此处将实时展示完整的调度轨迹与请求载荷。</p>
+      </div>
 
-                <!-- 端点路径 -->
-                <td>
-                  <div class="path-badge" :title="log.requestPath">
-                    <span class="method-tag">{{ log.requestMethod }}</span>
-                    <span class="path-val font-mono truncate-text">{{ log.requestPath }}</span>
-                  </div>
-                </td>
-
-                <!-- 模型 -->
-                <td>
-                  <span class="model-pill font-mono truncate-text" :title="log.model || '未指定'">
-                    {{ log.model || 'AI Model' }}
-                  </span>
-                </td>
-
-                <!-- 故障转移链路 -->
-                <td>
-                  <div v-if="log.triedChannels && log.triedChannels.length > 1" class="trail-chain">
-                    <template v-for="(ch, idx) in log.triedChannels" :key="idx">
-                      <span :class="['trail-chip', idx === log.triedChannels.length - 1 ? 'chip-success' : 'chip-fail']" :title="ch">
-                        {{ ch }}
-                      </span>
-                      <span v-if="idx < log.triedChannels.length - 1" class="trail-sep">➔</span>
-                    </template>
-                    <span class="badge badge-warning trail-mark">救急切换</span>
-                  </div>
-                  <div v-else-if="log.triedChannels && log.triedChannels.length === 1" class="trail-single">
-                    <span class="text-muted font-mono" style="font-size: 12px;" :title="log.triedChannels[0]">{{ log.triedChannels[0] }}</span>
-                  </div>
-                  <span v-else class="text-dim">-</span>
-                </td>
-
-                <!-- 最终渠道 -->
-                <td>
-                  <span v-if="log.finalChannel" class="channel-pill font-mono truncate-text" :title="log.finalChannel">
-                    {{ log.finalChannel }}
-                  </span>
-                  <span v-else class="text-dim" style="font-size: 12px;">{{ log.status === 'PENDING' ? '调度中...' : '无可用响应' }}</span>
-                </td>
-
-                <!-- 耗时与 Token -->
-                <td>
-                  <div class="timing-box font-mono">
-                    <span class="timing-ms">{{ log.durationMs }}ms</span>
-                    <span v-if="log.promptTokens || log.completionTokens" class="tokens-mini" :title="'Prompt: ' + (log.promptTokens || 0) + ' | Completion: ' + (log.completionTokens || 0)">
-                      {{ (log.promptTokens || 0) + (log.completionTokens || 0) }} tok
+      <div v-else class="logs-container glass-card">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 105px;">请求状态</th>
+                <th style="width: 110px;">发起时间</th>
+                <th>端点路由</th>
+                <th>请求模型</th>
+                <th>故障转移调度链路</th>
+                <th>最终渠道</th>
+                <th style="width: 95px;">耗时 / Tokens</th>
+                <th style="width: 110px; text-align: right;">载荷与诊断</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="log in pagedLogs" :key="log.id">
+                <tr 
+                  :class="['data-row', { 
+                    'is-expanded': expandedRows[log.id], 
+                    'row-failover': log.isFailover, 
+                    'row-error': log.status === 'FAILED' || log.statusCode >= 400,
+                    'row-pending': log.status === 'PENDING'
+                  }]"
+                  @click="toggleExpand(log.id)"
+                >
+                  <!-- 状态徽章 -->
+                  <td>
+                    <span v-if="log.status === 'PENDING'" class="badge badge-pending">
+                      <span class="pulse-indicator pulse-blue"></span> 运行中
                     </span>
-                  </div>
-                </td>
+                    <span v-else-if="log.status === 'SUCCESS' || (log.statusCode >= 200 && log.statusCode < 400 && log.status !== 'FAILED')" class="badge badge-success">
+                      {{ log.statusCode }} 成功
+                    </span>
+                    <span v-else class="badge badge-danger">
+                      {{ log.statusCode > 0 ? log.statusCode : 'ERR' }} 失败
+                    </span>
+                  </td>
 
-                <!-- 展开按钮 -->
-                <td style="text-align: right;">
-                  <button class="btn btn-secondary btn-xs" @click.stop="toggleExpand(log.id)">
-                    <span>{{ expandedRows[log.id] ? '收起' : '排查 / 载荷' }}</span>
-                    <span class="expand-caret">{{ expandedRows[log.id] ? '▲' : '▼' }}</span>
-                  </button>
-                </td>
-              </tr>
+                  <!-- 时间戳 -->
+                  <td class="font-mono text-dim" style="font-size: 12px;">
+                    {{ formatTime(log.timestamp) }}
+                  </td>
 
-              <!-- 展开的专业级检查抽屉 (Inspector Panel) -->
-              <tr v-if="expandedRows[log.id]" class="inspector-row">
-                <td colspan="8">
-                  <div class="inspector-panel glass-card">
-                    <!-- 抽屉顶部 Tab 切换 -->
-                    <div class="inspector-tabs">
-                      <button 
-                        :class="['inspector-tab', { active: getActiveSubTab(log.id) === 'request' }]"
-                        @click="setActiveSubTab(log.id, 'request')"
-                      >
-                        <span>📋 请求载荷 (Request Body)</span>
-                        <span v-if="log.requestBody" class="tab-dot"></span>
-                      </button>
-
-                      <button 
-                        :class="['inspector-tab', { active: getActiveSubTab(log.id) === 'response' }]"
-                        @click="setActiveSubTab(log.id, 'response')"
-                      >
-                        <span>💬 响应与错误诊断 (Diagnostics)</span>
-                        <span v-if="log.errorDetails || log.status === 'FAILED'" class="tab-dot dot-danger"></span>
-                      </button>
-
-                      <button 
-                        :class="['inspector-tab', { active: getActiveSubTab(log.id) === 'headers' }]"
-                        @click="setActiveSubTab(log.id, 'headers')"
-                      >
-                        <span>🕹️ 客户端请求头 (Headers)</span>
-                        <span v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="tab-dot"></span>
-                      </button>
+                  <!-- 端点路径 -->
+                  <td>
+                    <div class="path-badge" :title="log.requestPath">
+                      <span class="method-tag">{{ log.requestMethod }}</span>
+                      <span class="path-val font-mono truncate-text">{{ log.requestPath }}</span>
                     </div>
+                  </td>
 
-                    <!-- 抽屉内容区 -->
-                    <div class="inspector-body">
-                      <!-- Tab 1: 请求载荷 (Prompt/Messages/Input) -->
-                      <div v-if="getActiveSubTab(log.id) === 'request'" class="sub-tab-content">
-                        <div class="code-header-bar">
-                          <span class="code-title">客户端原始发送 JSON Payload:</span>
-                          <button 
-                            v-if="log.requestBody" 
-                            class="btn btn-secondary btn-xs" 
-                            @click="copyText(log.requestBody, '请求载荷已复制')"
-                          >
-                            📋 复制完整载荷
-                          </button>
-                        </div>
-                        <div v-if="log.requestBody" class="code-block-wrapper">
-                          <pre class="code-block font-mono">{{ formatJsonString(log.requestBody) }}</pre>
-                        </div>
-                        <div v-else class="empty-hint">该请求未携带请求体或为空。</div>
+                  <!-- 模型 -->
+                  <td>
+                    <span class="model-pill font-mono truncate-text" :title="log.model || '未指定'">
+                      {{ log.model || 'AI Model' }}
+                    </span>
+                  </td>
+
+                  <!-- 故障转移链路 -->
+                  <td>
+                    <div v-if="log.triedChannels && log.triedChannels.length > 1" class="trail-chain">
+                      <template v-for="(ch, idx) in log.triedChannels" :key="idx">
+                        <span :class="['trail-chip', idx === log.triedChannels.length - 1 ? 'chip-success' : 'chip-fail']" :title="ch">
+                          {{ ch }}
+                        </span>
+                        <span v-if="idx < log.triedChannels.length - 1" class="trail-sep">➔</span>
+                      </template>
+                      <span class="badge badge-warning trail-mark">救急切换</span>
+                    </div>
+                    <div v-else-if="log.triedChannels && log.triedChannels.length === 1" class="trail-single">
+                      <span class="text-muted font-mono" style="font-size: 12px;" :title="log.triedChannels[0]">{{ log.triedChannels[0] }}</span>
+                    </div>
+                    <span v-else class="text-dim">-</span>
+                  </td>
+
+                  <!-- 最终渠道 -->
+                  <td>
+                    <span v-if="log.finalChannel" class="channel-pill font-mono truncate-text" :title="log.finalChannel">
+                      {{ log.finalChannel }}
+                    </span>
+                    <span v-else class="text-dim" style="font-size: 12px;">{{ log.status === 'PENDING' ? '调度中...' : '无可用响应' }}</span>
+                  </td>
+
+                  <!-- 耗时与 Token -->
+                  <td>
+                    <div class="timing-box font-mono">
+                      <span class="timing-ms">{{ log.durationMs }}ms</span>
+                      <span v-if="log.promptTokens || log.completionTokens" class="tokens-mini" :title="'Prompt: ' + (log.promptTokens || 0) + ' | Completion: ' + (log.completionTokens || 0)">
+                        {{ (log.promptTokens || 0) + (log.completionTokens || 0) }} tok
+                      </span>
+                    </div>
+                  </td>
+
+                  <!-- 展开按钮 -->
+                  <td style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" @click.stop="toggleExpand(log.id)">
+                      <span>{{ expandedRows[log.id] ? '收起' : '排查 / 载荷' }}</span>
+                      <span class="expand-caret">{{ expandedRows[log.id] ? '▲' : '▼' }}</span>
+                    </button>
+                  </td>
+                </tr>
+
+                <!-- 展开的专业级检查抽屉 (Inspector Panel) -->
+                <tr v-if="expandedRows[log.id]" class="inspector-row">
+                  <td colspan="8">
+                    <div class="inspector-panel glass-card">
+                      <!-- 抽屉顶部 Tab 切换 -->
+                      <div class="inspector-tabs">
+                        <button 
+                          :class="['inspector-tab', { active: getActiveSubTab(log.id) === 'request' }]"
+                          @click="setActiveSubTab(log.id, 'request')"
+                        >
+                          <span>📋 请求载荷 (Request Body)</span>
+                          <span v-if="log.requestBody" class="tab-dot"></span>
+                        </button>
+
+                        <button 
+                          :class="['inspector-tab', { active: getActiveSubTab(log.id) === 'response' }]"
+                          @click="setActiveSubTab(log.id, 'response')"
+                        >
+                          <span>💬 响应与错误诊断 (Diagnostics)</span>
+                          <span v-if="log.errorDetails || log.status === 'FAILED'" class="tab-dot dot-danger"></span>
+                        </button>
+
+                        <button 
+                          :class="['inspector-tab', { active: getActiveSubTab(log.id) === 'headers' }]"
+                          @click="setActiveSubTab(log.id, 'headers')"
+                        >
+                          <span>🕹️ 客户端请求头 (Headers)</span>
+                          <span v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="tab-dot"></span>
+                        </button>
                       </div>
 
-                      <!-- Tab 2: 响应与错误诊断 -->
-                      <div v-else-if="getActiveSubTab(log.id) === 'response'" class="sub-tab-content">
-                        <!-- 错误高亮卡片 -->
-                        <div v-if="log.errorDetails || log.status === 'FAILED'" class="error-alert-card">
-                          <div class="error-card-top">
-                            <span class="error-badge-title">🚨 错误排查追踪:</span>
-                            <span v-if="log.errorDetails && log.errorDetails.includes('invalid_encrypted_content')" class="badge badge-warning">
-                              已识别：加密数据无法解密
-                            </span>
-                          </div>
-                          <pre class="error-code font-mono">{{ log.errorDetails || '上游调用发生异常中断' }}</pre>
-                          
-                          <div v-if="log.errorDetails && log.errorDetails.includes('invalid_encrypted_content')" class="solution-box">
-                            <strong>💡 智能修复提示：</strong>
-                            这是上游服务商对前一轮加密思维链（<code>encrypted_content</code>）的校验报错。当前网关已内置【自动剔除请求加密数据】功能，在网关设置中保持开启即可彻底杜绝该错误。
-                          </div>
-                        </div>
-
-                        <!-- 响应文本预览 -->
-                        <div v-if="log.responseBody" class="response-preview-box">
+                      <!-- 抽屉内容区 -->
+                      <div class="inspector-body">
+                        <!-- Tab 1: 请求载荷 (Prompt/Messages/Input) -->
+                        <div v-if="getActiveSubTab(log.id) === 'request'" class="sub-tab-content">
                           <div class="code-header-bar">
-                            <span class="code-title">上游返回内容摘要 (Response Preview):</span>
-                            <button class="btn btn-secondary btn-xs" @click="copyText(log.responseBody, '响应内容已复制')">📋 复制</button>
+                            <span class="code-title">客户端原始发送 JSON Payload:</span>
+                            <button 
+                              v-if="log.requestBody" 
+                              class="btn btn-secondary btn-xs" 
+                              @click="copyText(formatJsonString(log.requestBody), '请求载荷已复制')"
+                            >
+                              📋 复制 JSON
+                            </button>
                           </div>
-                          <pre class="code-block font-mono">{{ formatJsonString(log.responseBody) }}</pre>
+                          <div v-if="log.requestBody" class="code-viewer font-mono">
+                            <pre>{{ formatJsonString(log.requestBody) }}</pre>
+                          </div>
+                          <div v-else class="empty-hint">
+                            未记录请求体（可能由于请求体为空、超出限制或此前未开启完整载荷捕获）。
+                          </div>
                         </div>
-                        <div v-else-if="!log.errorDetails && log.status !== 'FAILED'" class="empty-hint">
-                          {{ log.status === 'PENDING' ? '⏳ 正在等待上游响应传输...' : '该流式请求已直通传输完成。' }}
-                        </div>
-                      </div>
 
-                      <!-- Tab 3: 请求头嗅探 -->
-                      <div v-else-if="getActiveSubTab(log.id) === 'headers'" class="sub-tab-content">
-                        <div class="code-header-bar">
-                          <span class="code-title">嗅探到的客户端环境头 (Client Headers):</span>
-                          <button 
-                            v-if="log.requestHeaders" 
-                            class="btn btn-secondary btn-xs" 
-                            @click="copyText(JSON.stringify(log.requestHeaders, null, 2), '请求头已复制')"
-                          >
-                            📋 复制 Headers
-                          </button>
-                        </div>
-                        <div v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="headers-list-grid">
-                          <div v-for="(val, key) in log.requestHeaders" :key="key" class="header-key-val font-mono">
-                            <span class="h-key">{{ key }}:</span>
-                            <span class="h-val" :title="val">{{ val }}</span>
+                        <!-- Tab 2: 响应与错误诊断 -->
+                        <div v-else-if="getActiveSubTab(log.id) === 'response'" class="sub-tab-content">
+                          <!-- 错误诊断提示框 -->
+                          <div v-if="log.errorDetails" class="error-diag-card">
+                            <div class="diag-title">🚨 上游错误诊断与失败原因:</div>
+                            <pre class="diag-content font-mono">{{ log.errorDetails }}</pre>
+                          </div>
+
+                          <div class="code-header-bar mt-12">
+                            <span class="code-title">响应快照 / 最终返回摘要:</span>
+                            <button 
+                              v-if="log.responseBody" 
+                              class="btn btn-secondary btn-xs" 
+                              @click="copyText(formatJsonString(log.responseBody), '响应快照已复制')"
+                            >
+                              📋 复制响应
+                            </button>
+                          </div>
+                          <div v-if="log.responseBody" class="code-viewer font-mono">
+                            <pre>{{ formatJsonString(log.responseBody) }}</pre>
+                          </div>
+                          <div v-else-if="!log.errorDetails" class="empty-hint">
+                            {{ log.status === 'PENDING' ? '流式请求传输中，等待最终完成响应...' : '未记录响应体内容或该请求直接返回了流式 SSE。' }}
                           </div>
                         </div>
-                        <div v-else class="empty-hint">未采集到有效的客户端请求头。</div>
+
+                        <!-- Tab 3: 请求头信息 -->
+                        <div v-else-if="getActiveSubTab(log.id) === 'headers'" class="sub-tab-content">
+                          <div class="code-header-bar">
+                            <span class="code-title">客户端已发送 HTTP Headers (脱敏后):</span>
+                            <button 
+                              v-if="log.requestHeaders" 
+                              class="btn btn-secondary btn-xs" 
+                              @click="copyText(JSON.stringify(log.requestHeaders, null, 2), '请求头已复制')"
+                            >
+                              📋 复制 Headers
+                            </button>
+                          </div>
+                          <div v-if="log.requestHeaders && Object.keys(log.requestHeaders).length > 0" class="headers-list-grid">
+                            <div v-for="(val, key) in log.requestHeaders" :key="key" class="header-key-val font-mono">
+                              <span class="h-key">{{ key }}:</span>
+                              <span class="h-val" :title="val">{{ val }}</span>
+                            </div>
+                          </div>
+                          <div v-else class="empty-hint">未采集到有效的客户端请求头。</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
 
-      <!-- 底部精致分页器 -->
-      <div class="pagination-footer">
-        <div class="page-meta">
-          <span>共 <strong class="text-primary font-mono">{{ totalCount }}</strong> 条日志，</span>
-          <span>第 <strong class="font-mono">{{ currentPage }}</strong> / <strong class="font-mono">{{ totalPages }}</strong> 页</span>
-          <div class="page-size-wrap">
-            <span class="size-txt">每页:</span>
-            <select :value="pageSize" @change="onPageSizeChange(Number($event.target.value))" class="form-select size-select font-mono">
-              <option :value="20">20 条</option>
-              <option :value="50">50 条</option>
-              <option :value="100">100 条</option>
-              <option :value="200">200 条</option>
-            </select>
+        <!-- 底部精致分页器 -->
+        <div class="pagination-footer">
+          <div class="page-meta">
+            <span>共 <strong class="text-primary font-mono">{{ totalCount }}</strong> 条日志，</span>
+            <span>第 <strong class="font-mono">{{ currentPage }}</strong> / <strong class="font-mono">{{ totalPages }}</strong> 页</span>
+            <div class="page-size-wrap">
+              <span class="size-txt">每页:</span>
+              <select :value="pageSize" @change="onPageSizeChange(Number($event.target.value))" class="form-select size-select font-mono">
+                <option :value="20">20 条</option>
+                <option :value="50">50 条</option>
+                <option :value="100">100 条</option>
+                <option :value="200">200 条</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="page-nav-btns">
+            <button class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="goToPage(1)">« 首页</button>
+            <button class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">‹ 上一页</button>
+            
+            <template v-for="(p, idx) in visiblePages" :key="idx">
+              <span v-if="p === '...'" class="page-dots text-dim">...</span>
+              <button 
+                v-else 
+                :class="['page-number-btn font-mono', { active: p === currentPage }]" 
+                @click="goToPage(p)"
+              >
+                {{ p }}
+              </button>
+            </template>
+
+            <button class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一页 ›</button>
+            <button class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">末页 »</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 模式 2: 后端服务运行控制台日志 ================= -->
+    <div v-else class="system-logs-container glass-card">
+      <div class="syslogs-toolbar">
+        <div class="syslogs-left">
+          <span class="sys-label">日志级别:</span>
+          <div class="sys-level-pills">
+            <button 
+              v-for="lvl in sysLogLevels" 
+              :key="lvl"
+              :class="['pill-btn', { active: selectedSysLevel === lvl }]"
+              @click="selectedSysLevel = lvl; fetchSysLogs()"
+            >
+              {{ lvl }}
+            </button>
           </div>
         </div>
 
-        <div class="page-nav-btns">
-          <button class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="goToPage(1)">« 首页</button>
-          <button class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">‹ 上一页</button>
-          
-          <template v-for="(p, idx) in visiblePages" :key="idx">
-            <span v-if="p === '...'" class="page-dots text-dim">...</span>
-            <button 
-              v-else 
-              :class="['page-number-btn font-mono', { active: p === currentPage }]" 
-              @click="goToPage(p)"
-            >
-              {{ p }}
-            </button>
-          </template>
+        <div class="syslogs-actions">
+          <label class="auto-refresh-check" title="每 2 秒实时同步服务日志">
+            <input type="checkbox" v-model="autoRefreshSysLogs" @change="toggleAutoRefreshSysLogs" />
+            <span>实时刷新 (2s)</span>
+          </label>
 
-          <button class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一页 ›</button>
-          <button class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">末页 »</button>
+          <button class="btn btn-secondary btn-xs" @click="fetchSysLogs" :disabled="fetchingSysLogs">
+            <span>🔄 刷新</span>
+          </button>
+
+          <button class="btn btn-secondary btn-xs" @click="copyAllSysLogs" :disabled="sysLogs.length === 0">
+            <span>📋 复制全部</span>
+          </button>
+
+          <button class="btn btn-danger btn-xs" @click="clearSysLogs" :disabled="sysLogs.length === 0">
+            <span>🗑️ 清空</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="terminal-screen font-mono" ref="sysLogRef">
+        <div v-if="sysLogs.length === 0" class="terminal-empty">
+          > 暂无系统级运行日志...
+        </div>
+        <div 
+          v-for="log in sysLogs" 
+          :key="log.id" 
+          :class="['term-row', `level-${(log.level || '').toLowerCase()}`]"
+        >
+          <span class="t-time">[{{ formatTime(log.timestamp) }}]</span>
+          <span :class="['t-level', `badge-${(log.level || '').toLowerCase()}`]">[{{ log.level }}]</span>
+          <span class="t-cat" v-if="log.category">[{{ log.category }}]</span>
+          <span class="t-msg">{{ log.message }}</span>
+          <div v-if="log.exception" class="t-exc">{{ log.exception }}</div>
         </div>
       </div>
     </div>
@@ -424,6 +499,10 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'toast']);
 
+// 视图模式：'requests'（模型业务流水）| 'system'（系统服务运行日志）
+const activeViewMode = ref('requests');
+
+// 1. 请求业务日志相关状态
 const pagedLogs = ref([]);
 const totalCount = ref(0);
 const currentPage = ref(1);
@@ -439,6 +518,15 @@ const savingSettings = ref(false);
 const expandedRows = reactive({});
 const activeSubTabs = reactive({});
 
+const summaryMetrics = reactive({
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  pendingRequests: 0,
+  totalFailovers: 0,
+  successRate: 100
+});
+
 const logSettings = reactive({
   autoCleanupEnabled: true,
   retentionDays: 7,
@@ -449,13 +537,10 @@ let searchDebounceTimer = null;
 let pollTimer = null;
 
 // 指标计算
-const pendingCount = computed(() => pagedLogs.value.filter(l => l.status === 'PENDING').length);
-const successCount = computed(() => pagedLogs.value.filter(l => l.status === 'SUCCESS' || (l.statusCode >= 200 && l.statusCode < 400 && l.status !== 'FAILED')).length);
-const failoverCount = computed(() => pagedLogs.value.filter(l => l.isFailover || l.status === 'FAILED' || l.statusCode >= 400).length);
-const calcRate = computed(() => {
-  if (totalCount.value === 0) return 100;
-  return Math.round((successCount.value / Math.max(1, pagedLogs.value.length)) * 100);
-});
+const pendingCount = computed(() => summaryMetrics.pendingRequests || pagedLogs.value.filter(l => l.status === 'PENDING').length);
+const successCount = computed(() => summaryMetrics.successfulRequests || pagedLogs.value.filter(l => l.status === 'SUCCESS' || (l.statusCode >= 200 && l.statusCode < 400 && l.status !== 'FAILED')).length);
+const failoverCount = computed(() => summaryMetrics.failedRequests || summaryMetrics.totalFailovers || pagedLogs.value.filter(l => l.isFailover || l.status === 'FAILED' || l.statusCode >= 400).length);
+const calcRate = computed(() => summaryMetrics.successRate || 100);
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)));
 
@@ -466,6 +551,16 @@ const filterTabs = [
   { id: 'failed', label: '失败 / 异常' },
   { id: 'failover', label: '故障转移' }
 ];
+
+// 2. 系统服务运行日志相关状态
+const sysLogs = ref([]);
+const selectedSysLevel = ref('ALL');
+const autoRefreshSysLogs = ref(true);
+const fetchingSysLogs = ref(false);
+const sysLogRef = ref(null);
+let sysPollTimer = null;
+
+const sysLogLevels = ['ALL', 'INFO', 'WARN', 'ERROR'];
 
 function getActiveSubTab(logId) {
   return activeSubTabs[logId] || 'request';
@@ -510,24 +605,106 @@ async function copyText(text, successMsg = '已复制') {
   }
 }
 
+// 拉取分页请求日志与全网概览指标
 async function fetchLogs() {
   loading.value = true;
   try {
-    const res = await api.getPagedLogs({
-      page: currentPage.value,
-      pageSize: pageSize.value,
-      filter: currentFilter.value,
-      keyword: searchKeyword.value.trim()
-    });
+    const [res, s] = await Promise.all([
+      api.getPagedLogs(
+        currentPage.value,
+        pageSize.value,
+        currentFilter.value,
+        searchKeyword.value.trim()
+      ),
+      api.getSummary()
+    ]);
     if (res) {
       pagedLogs.value = res.items || [];
       totalCount.value = res.totalCount || 0;
     }
+    if (s) {
+      Object.assign(summaryMetrics, s);
+    }
   } catch (err) {
-    console.error('拉取日志失败:', err);
+    console.error('拉取请求日志失败:', err);
   } finally {
     loading.value = false;
   }
+}
+
+// 拉取系统服务运行日志
+async function fetchSysLogs() {
+  fetchingSysLogs.value = true;
+  try {
+    const lvl = selectedSysLevel.value === 'ALL' ? '' : selectedSysLevel.value;
+    const res = await api.getSystemLogs(200, lvl);
+    sysLogs.value = res || [];
+  } catch (err) {
+    console.error('获取系统服务日志失败:', err);
+  } finally {
+    fetchingSysLogs.value = false;
+  }
+}
+
+function switchToSysLogs() {
+  activeViewMode.value = 'system';
+  stopPolling();
+  fetchSysLogs();
+  if (autoRefreshSysLogs.value) {
+    startSysPolling();
+  }
+}
+
+function switchToRequests() {
+  activeViewMode.value = 'requests';
+  stopSysPolling();
+  fetchLogs();
+  if (autoRefresh.value) {
+    startPolling();
+  }
+}
+
+function toggleAutoRefreshSysLogs() {
+  if (autoRefreshSysLogs.value) {
+    startSysPolling();
+    emit('toast', '已开启每 2 秒同步服务日志', 'info');
+  } else {
+    stopSysPolling();
+    emit('toast', '已暂停服务日志自动同步', 'info');
+  }
+}
+
+function startSysPolling() {
+  stopSysPolling();
+  sysPollTimer = setInterval(() => {
+    if (!fetchingSysLogs.value && activeViewMode.value === 'system') {
+      fetchSysLogs();
+    }
+  }, 2000);
+}
+
+function stopSysPolling() {
+  if (sysPollTimer) {
+    clearInterval(sysPollTimer);
+    sysPollTimer = null;
+  }
+}
+
+async function clearSysLogs() {
+  if (!confirm('确定要清空后端系统运行控制台日志吗？')) return;
+  try {
+    await api.clearSystemLogs();
+    sysLogs.value = [];
+    emit('toast', '系统运行日志已清空', 'success');
+  } catch (err) {
+    emit('toast', `清空失败: ${err.message}`, 'error');
+  }
+}
+
+async function copyAllSysLogs() {
+  if (sysLogs.value.length === 0) return;
+  const text = sysLogs.value.map(l => `[${formatTime(l.timestamp)}] [${l.level}] ${l.category ? `[${l.category}] ` : ''}${l.message}${l.exception ? `\n${l.exception}` : ''}`).join('\n');
+  copyText(text, `已复制 ${sysLogs.value.length} 条系统运行日志`);
 }
 
 function onFilterChange(filterId) {
@@ -564,7 +741,7 @@ function toggleAutoRefresh() {
 function startPolling() {
   stopPolling();
   pollTimer = setInterval(() => {
-    if (!loading.value) {
+    if (!loading.value && activeViewMode.value === 'requests') {
       fetchLogs();
     }
   }, 2000);
@@ -608,12 +785,14 @@ const visiblePages = computed(() => {
 });
 
 async function clearLogs() {
-  if (!confirm('确定要清空所有请求日志吗？此操作不可恢复。')) return;
+  if (!confirm('确定要清空全部请求历史记录吗？此操作不可逆。')) return;
   try {
     await api.clearLogs();
     pagedLogs.value = [];
     totalCount.value = 0;
-    emit('toast', '所有请求日志已成功清空', 'success');
+    emit('toast', '请求日志已成功清空', 'success');
+    emit('refresh');
+    fetchLogs();
   } catch (err) {
     emit('toast', `清空失败: ${err.message}`, 'error');
   }
@@ -623,7 +802,7 @@ async function loadLogSettings() {
   try {
     const res = await api.getLogSettings();
     if (res) Object.assign(logSettings, res);
-  } catch { }
+  } catch (err) {}
 }
 
 async function saveSettings() {
@@ -631,7 +810,8 @@ async function saveSettings() {
   try {
     await api.saveLogSettings(logSettings);
     showSettingsModal.value = false;
-    emit('toast', '日志清理策略已保存生效！', 'success');
+    emit('toast', '日志保留策略已保存', 'success');
+    fetchLogs();
   } catch (err) {
     emit('toast', `保存失败: ${err.message}`, 'error');
   } finally {
@@ -642,11 +822,14 @@ async function saveSettings() {
 onMounted(() => {
   fetchLogs();
   loadLogSettings();
-  if (autoRefresh.value) startPolling();
+  if (autoRefresh.value) {
+    startPolling();
+  }
 });
 
 onUnmounted(() => {
   stopPolling();
+  stopSysPolling();
 });
 </script>
 
@@ -657,74 +840,116 @@ onUnmounted(() => {
   gap: 16px;
 }
 
-/* 1. 指标看板行 */
+/* 顶部视图双模切换 */
+.view-mode-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.mode-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mode-tab-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  border-color: var(--border-medium);
+}
+
+.mode-tab-btn.active {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.15);
+}
+
+.tab-badge-num {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.requests-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 顶部指标四宫格 */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 
 .metric-card {
-  padding: 16px 18px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
 }
 
 .metric-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
 }
 
 .metric-label {
-  font-size: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
   font-weight: 500;
-  color: var(--text-dim);
-}
-
-.metric-icon {
-  font-size: 14px;
 }
 
 .metric-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  margin-bottom: 4px;
+  color: var(--text-main);
+  line-height: 1.2;
+  margin-bottom: 6px;
 }
 
 .metric-footer {
   font-size: 11px;
 }
 
-/* 2. 操作栏 */
+/* 工具栏 */
 .action-toolbar {
-  padding: 10px 16px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
 .status-tabs {
   display: flex;
-  gap: 4px;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 3px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  align-items: center;
+  gap: 6px;
 }
 
 .status-tab-btn {
   padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.16s ease;
   display: flex;
@@ -733,14 +958,15 @@ onUnmounted(() => {
 }
 
 .status-tab-btn:hover {
+  background: var(--bg-card-hover);
   color: var(--text-main);
 }
 
 .status-tab-btn.active {
-  background: var(--bg-surface-elevated);
-  color: #818cf8;
+  background: var(--accent-primary);
+  color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 .toolbar-right-tools {
@@ -760,22 +986,25 @@ onUnmounted(() => {
   left: 10px;
   font-size: 12px;
   color: var(--text-dim);
+  pointer-events: none;
 }
 
 .search-field {
-  padding: 6px 28px 6px 28px;
+  padding: 6px 28px 6px 30px;
+  font-size: 12px;
   width: 260px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-main);
-  font-size: 12px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: all 0.18s;
 }
 
 .search-field:focus {
   border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+  width: 320px;
 }
 
 .search-clear-btn {
@@ -784,43 +1013,87 @@ onUnmounted(() => {
   background: none;
   border: none;
   color: var(--text-dim);
-  cursor: pointer;
   font-size: 11px;
+  cursor: pointer;
 }
 
-/* 3. 数据表格容器 */
+.search-clear-btn:hover {
+  color: var(--text-main);
+}
+
+/* 空状态与加载中 */
+.state-box {
+  padding: 60px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.state-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.8;
+}
+
+.state-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.state-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 500px;
+}
+
+.loading-ring {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 14px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 表格容器 */
 .logs-container {
   overflow: hidden;
 }
 
 .table-responsive {
+  width: 100%;
   overflow-x: auto;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 13px;
   text-align: left;
 }
 
 .data-table th {
-  padding: 12px 16px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 12px 14px;
   color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-subtle);
   background: rgba(0, 0, 0, 0.15);
-  border-bottom: 1px solid var(--border-subtle);
-  white-space: nowrap;
-}
-
-.data-table td {
-  padding: 12px 16px;
-  font-size: 13px;
-  border-bottom: 1px solid var(--border-subtle);
-  vertical-align: middle;
 }
 
 .data-row {
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
@@ -830,36 +1103,37 @@ onUnmounted(() => {
 }
 
 .data-row.is-expanded {
-  background-color: var(--bg-surface-elevated);
+  background-color: rgba(99, 102, 241, 0.05);
 }
 
-.row-failover {
-  border-left: 2px solid var(--warning);
+.data-row.row-failover {
+  background-color: rgba(245, 158, 11, 0.04);
 }
 
-.row-error {
-  border-left: 2px solid var(--danger);
+.data-row.row-error {
+  background-color: rgba(244, 63, 94, 0.04);
 }
 
-.row-pending {
-  border-left: 2px solid var(--pending);
+.data-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
 }
 
-/* 单元格微元素 */
+/* 单元格微型组件 */
 .path-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: 260px;
+  max-width: 200px;
 }
 
 .method-tag {
   font-size: 10px;
   font-weight: 700;
-  color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.15);
-  padding: 2px 4px;
+  padding: 1px 4px;
   border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
 }
 
 .path-val {
@@ -868,18 +1142,20 @@ onUnmounted(() => {
 }
 
 .model-pill {
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
   display: inline-block;
+  font-size: 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
   max-width: 140px;
 }
 
 .channel-pill {
-  font-size: 12px;
-  color: #a5b4fc;
   display: inline-block;
+  font-size: 12px;
+  color: var(--text-muted);
   max-width: 150px;
 }
 
@@ -892,19 +1168,28 @@ onUnmounted(() => {
 
 .trail-chip {
   font-size: 11px;
-  padding: 2px 6px;
-  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chip-fail {
   background: var(--danger-bg);
   color: var(--danger);
+  border: 1px solid var(--danger-border);
+  text-decoration: line-through;
+  opacity: 0.85;
 }
 
 .chip-success {
   background: var(--success-bg);
   color: var(--success);
+  border: 1px solid var(--success-border);
+  font-weight: 600;
 }
 
 .trail-sep {
@@ -912,14 +1197,21 @@ onUnmounted(() => {
   color: var(--text-dim);
 }
 
+.trail-mark {
+  font-size: 10px;
+  padding: 0 4px;
+}
+
 .timing-box {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .timing-ms {
   font-size: 12px;
   color: var(--text-main);
+  font-weight: 500;
 }
 
 .tokens-mini {
@@ -929,19 +1221,19 @@ onUnmounted(() => {
 
 .expand-caret {
   font-size: 9px;
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
-/* 4. 展开的诊断抽屉 Inspector Panel */
+/* 展开抽屉面板 */
 .inspector-row td {
   padding: 0;
-  background: rgba(0, 0, 0, 0.2);
+  background: #060913;
 }
 
 .inspector-panel {
-  margin: 10px 16px 16px;
+  margin: 10px 14px 14px;
   border: 1px solid var(--border-medium);
-  background: var(--bg-surface);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -949,21 +1241,23 @@ onUnmounted(() => {
   display: flex;
   background: rgba(0, 0, 0, 0.25);
   border-bottom: 1px solid var(--border-subtle);
+  padding: 4px 10px 0;
+  gap: 4px;
 }
 
 .inspector-tab {
-  padding: 10px 16px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 8px 14px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.16s ease;
+  transition: all 0.15s ease;
 }
 
 .inspector-tab:hover {
@@ -980,103 +1274,99 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-primary);
+  background: var(--info);
 }
 
-.dot-danger {
+.tab-dot.dot-danger {
   background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
 }
 
 .inspector-body {
   padding: 16px;
 }
 
+.sub-tab-content {
+  display: flex;
+  flex-direction: column;
+}
+
 .code-header-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
 }
 
 .code-title {
   font-size: 12px;
-  font-weight: 600;
   color: var(--text-dim);
+  font-weight: 600;
 }
 
-.code-block-wrapper {
-  max-height: 380px;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.35);
+.code-viewer {
+  background: #03060c;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 12px 14px;
+  max-height: 400px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #cbd5e1;
 }
 
-.code-block {
-  font-size: 12px;
-  line-height: 1.5;
-  color: #e2e8f0;
+.code-viewer pre {
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-.error-alert-card {
-  background: var(--danger-bg);
-  border: 1px solid var(--danger-border);
+.error-diag-card {
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.3);
   border-radius: var(--radius-md);
-  padding: 14px;
-  margin-bottom: 14px;
-}
-
-.error-card-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 12px 14px;
   margin-bottom: 8px;
 }
 
-.error-badge-title {
-  font-size: 13px;
+.diag-title {
+  font-size: 12px;
   font-weight: 700;
   color: var(--danger);
+  margin-bottom: 6px;
 }
 
-.error-code {
-  color: #fecdd3;
+.diag-content {
+  margin: 0;
   font-size: 12px;
+  color: #fca5a5;
   white-space: pre-wrap;
   word-break: break-all;
-}
-
-.solution-box {
-  margin-top: 10px;
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: #fed7aa;
 }
 
 .headers-list-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 12px;
-  border-radius: var(--radius-md);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 6px;
+  background: #03060c;
   border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
 }
 
 .header-key-val {
   display: flex;
-  gap: 8px;
-  font-size: 12px;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  overflow: hidden;
 }
 
 .h-key {
-  color: #a5b4fc;
+  color: #818cf8;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .h-val {
@@ -1087,15 +1377,19 @@ onUnmounted(() => {
 }
 
 .empty-hint {
-  font-size: 12px;
   color: var(--text-dim);
-  padding: 16px 0;
-  text-align: center;
+  font-size: 12px;
+  font-style: italic;
+  padding: 8px 0;
 }
 
-/* 5. 分页器 */
+.mt-12 {
+  margin-top: 12px;
+}
+
+/* 分页器 */
 .pagination-footer {
-  padding: 12px 18px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1107,9 +1401,9 @@ onUnmounted(() => {
 .page-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .page-size-wrap {
@@ -1120,9 +1414,9 @@ onUnmounted(() => {
 }
 
 .size-select {
+  padding: 2px 6px;
+  font-size: 11px;
   width: auto;
-  padding: 3px 8px;
-  font-size: 12px;
 }
 
 .page-nav-btns {
@@ -1136,129 +1430,295 @@ onUnmounted(() => {
   height: 26px;
   padding: 0 6px;
   font-size: 12px;
-  border-radius: var(--radius-xs);
-  background: var(--bg-surface);
+  background: transparent;
   border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
+  transition: all 0.15s;
+}
+
+.page-number-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
 }
 
 .page-number-btn.active {
   background: var(--accent-primary);
-  color: #ffffff;
   border-color: var(--accent-primary);
-  font-weight: 600;
+  color: #ffffff;
+  font-weight: 700;
 }
 
-/* 空态与加载 */
-.state-box {
-  padding: 48px 24px;
-  text-align: center;
+.page-dots {
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+/* ================= 模式 2: 系统控制台视窗 ================= */
+.system-logs-container {
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
+  gap: 14px;
+}
+
+.syslogs-toolbar {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 12px;
 }
 
-.state-icon {
-  font-size: 32px;
+.syslogs-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.state-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.state-desc {
+.sys-label {
   font-size: 12px;
   color: var(--text-dim);
 }
 
-.loading-ring {
-  width: 28px;
-  height: 28px;
-  border: 2px solid rgba(99, 102, 241, 0.2);
-  border-top-color: var(--accent-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 8px;
+.sys-level-pills {
+  display: flex;
+  gap: 4px;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.pill-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
-/* 模态弹窗 */
+.pill-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+}
+
+.pill-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.syslogs-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auto-refresh-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  margin-right: 4px;
+}
+
+.terminal-screen {
+  background: #060913;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  height: 640px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.7;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.terminal-empty {
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 12px 0;
+}
+
+.term-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  word-break: break-all;
+}
+
+.t-time {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.t-level {
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.t-cat {
+  color: #818cf8;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.t-msg {
+  color: var(--text-main);
+}
+
+.level-info .t-level { color: var(--success); }
+.level-warn .t-level { color: var(--warning); }
+.level-error .t-level { color: var(--danger); }
+.level-error .t-msg { color: #fca5a5; }
+
+.t-exc {
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: rgba(244, 63, 94, 0.1);
+  border-left: 2px solid var(--danger);
+  color: #fecdd3;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+/* 策略弹窗 Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 200;
 }
 
 .modal-container {
-  width: 460px;
+  width: 480px;
   max-width: 90vw;
-  padding: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-subtle);
+  justify-content: space-between;
 }
 
 .modal-title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .close-btn {
   background: none;
   border: none;
   color: var(--text-dim);
+  font-size: 16px;
   cursor: pointer;
-  font-size: 14px;
+}
+
+.close-btn:hover {
+  color: var(--text-main);
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .form-group {
-  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .form-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-dim);
-  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.mb-0 {
+  margin-bottom: 0;
 }
 
 .form-hint {
   font-size: 11px;
   color: var(--text-dim);
-  margin-top: 4px;
-}
-
-.switch-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  line-height: 1.5;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
+}
+
+/* 开关组件 Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  transition: .3s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--accent-primary);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
 }
 </style>

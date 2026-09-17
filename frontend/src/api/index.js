@@ -31,8 +31,26 @@ export const api = {
 
   // 请求业务日志与概览
   getLogs: (limit = 100) => request(`/logs?limit=${limit}`),
-  getPagedLogs: (page = 1, pageSize = 50, filter = 'all', keyword = '') => 
-    request(`/logs/paged?page=${page}&pageSize=${pageSize}&filter=${encodeURIComponent(filter)}&keyword=${encodeURIComponent(keyword)}`),
+  getPagedLogs: (pageOrOptions = 1, pageSize = 50, filter = 'all', keyword = '') => {
+    let p = 1;
+    let size = 50;
+    let f = 'all';
+    let kw = '';
+
+    if (typeof pageOrOptions === 'object' && pageOrOptions !== null) {
+      p = pageOrOptions.page || 1;
+      size = pageOrOptions.pageSize || pageOrOptions.size || 50;
+      f = pageOrOptions.filter || 'all';
+      kw = pageOrOptions.keyword || '';
+    } else {
+      p = pageOrOptions || 1;
+      size = pageSize || 50;
+      f = filter || 'all';
+      kw = keyword || '';
+    }
+
+    return request(`/logs/paged?page=${p}&pageSize=${size}&filter=${encodeURIComponent(f)}&keyword=${encodeURIComponent(kw)}`);
+  },
   clearLogs: () => request('/logs', { method: 'DELETE' }),
   getSummary: () => request('/logs/summary'),
   getLogSettings: () => request('/logs/settings'),

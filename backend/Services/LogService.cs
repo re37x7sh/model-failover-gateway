@@ -318,6 +318,7 @@ public class LogService : ILogService, IDisposable
     {
         lock (_lock)
         {
+            var pending = _logs.Count(x => x.Status == "PENDING");
             return new DashboardSummary
             {
                 TotalChannels = totalChannels,
@@ -326,6 +327,7 @@ public class LogService : ILogService, IDisposable
                 TotalFailovers = _totalFailovers,
                 SuccessfulRequests = _successfulRequests,
                 FailedRequests = _failedRequests,
+                PendingRequests = pending,
                 CurrentPrimaryChannelName = primaryChannelName
             };
         }

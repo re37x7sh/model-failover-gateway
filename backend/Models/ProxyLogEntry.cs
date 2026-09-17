@@ -76,6 +76,7 @@ public class DashboardSummary
     public long TotalFailovers { get; set; }
     public long SuccessfulRequests { get; set; }
     public long FailedRequests { get; set; }
+    public long PendingRequests { get; set; }
     public double SuccessRate => TotalRequests == 0 ? 100.0 : Math.Round((double)SuccessfulRequests / TotalRequests * 100, 2);
     public string? CurrentPrimaryChannelName { get; set; }
 }
