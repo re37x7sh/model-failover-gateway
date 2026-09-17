@@ -2,80 +2,120 @@
   <div v-if="isPetStandalone" class="pet-standalone-canvas">
     <DesktopPet :is-standalone="true" @open-settings="openFullDashboard" />
   </div>
-  <div v-else class="app-layout">
-    <Header 
+  <div v-else class="app-shell">
+    <!-- 1. 左侧常驻高质感侧边栏 (支持折叠) -->
+    <Sidebar 
       :current-tab="currentTab" 
       :alerts="alerts"
+      :collapsed="isSidebarCollapsed"
       @update:current-tab="currentTab = $event" 
+      @update:collapsed="isSidebarCollapsed = $event"
       @open-settings="showSettingsModal = true"
       @dismiss-alert="handleDismissAlert"
       @clear-alerts="handleClearAllAlerts"
     />
 
-    <!-- ⚠️ 渠道异常全局告警横幅（可手动关闭） -->
-    <transition name="banner-slide">
-      <div v-if="alerts.length > 0" class="alert-top-bar">
-        <div class="alert-top-container">
-          <div class="alert-content">
-            <span class="alert-icon">⚠️</span>
-            <span class="alert-title">渠道异常告警：</span>
-            <span class="alert-channel">[{{ alerts[0].channelName }}]</span>
-            <span class="alert-reason">{{ alerts[0].reason }}</span>
-            <span v-if="alerts[0].occurCount > 1" class="badge badge-warning">发生 {{ alerts[0].occurCount }} 次</span>
-            <span class="alert-tip">（网关已自动触发智能故障转移）</span>
+    <!-- 2. 右侧主工作视口 -->
+    <div class="main-viewport">
+      <!-- 顶部轻量 Topbar 状态栏 -->
+      <header class="top-nav-bar">
+        <div class="top-nav-left">
+          <button 
+            class="topbar-collapse-btn" 
+            @click="isSidebarCollapsed = !isSidebarCollapsed" 
+            :title="isSidebarCollapsed ? '展开侧边栏 (Ctrl+B)' : '折叠侧边栏 (Ctrl+B)'"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 3v18" />
+              <path v-if="!isSidebarCollapsed" d="m16 15-3-3 3-3" />
+              <path v-else d="m14 9 3 3-3 3" />
+            </svg>
+          </button>
+          <span class="view-tag">{{ getViewCategory(currentTab) }}</span>
+          <span class="nav-slash">/</span>
+          <h1 class="view-title">{{ getViewTitle(currentTab) }}</h1>
+        </div>
+
+        <div class="top-nav-right">
+          <div class="status-summary-pill" v-if="summary.totalRequests > 0">
+            <span class="pill-dot"></span>
+            <span class="pill-label">总调用:</span>
+            <span class="pill-val font-mono">{{ summary.totalRequests }}</span>
+            <span class="pill-divider"></span>
+            <span class="pill-label">成功率:</span>
+            <span class="pill-val text-success font-mono">{{ summary.successRate }}%</span>
           </div>
-          <div class="alert-actions">
-            <button class="alert-dismiss-btn" @click="handleDismissAlert(alerts[0].id)" title="手动关闭此通知">
-              ✕ 关闭通知
-            </button>
-            <button v-if="alerts.length > 1" class="alert-clear-all-btn" @click="handleClearAllAlerts" title="清空全部异常通知">
-              全部忽略 ({{ alerts.length }})
-            </button>
+
+          <div v-if="summary.currentPrimaryChannelName" class="primary-channel-pill" :title="'当前主用渠道: ' + summary.currentPrimaryChannelName">
+            <span class="pill-icon">⚡</span>
+            <span class="pill-channel-name truncate-text">{{ summary.currentPrimaryChannelName }}</span>
           </div>
         </div>
-      </div>
-    </transition>
+      </header>
 
-    <main class="main-content">
-      <transition name="view-fade" mode="out-in">
-        <DashboardView 
-          v-if="currentTab === 'dashboard'" 
-          :summary="summary" 
-          :recent-logs="logs"
-          @navigate="currentTab = $event"
-        />
-
-        <ChannelsView 
-          v-else-if="currentTab === 'channels'" 
-          :channels="channels"
-          @refresh="loadAllData"
-          @toast="showToast"
-        />
-
-        <PlaygroundView 
-          v-else-if="currentTab === 'playground'" 
-          @toast="showToast"
-        />
-
-        <TokenStatsView 
-          v-else-if="currentTab === 'tokens'" 
-          @toast="showToast"
-        />
-
-        <LogsView 
-          v-else-if="currentTab === 'logs'" 
-          :logs="logs"
-          @refresh="loadLogsAndSummary"
-          @toast="showToast"
-        />
-
-        <GuideView 
-          v-else-if="currentTab === 'guide'" 
-          @toast="showToast"
-          @open-settings="showSettingsModal = true"
-        />
+      <!-- ⚠️ 渠道异常全局告警横幅（可手动关闭） -->
+      <transition name="banner-slide">
+        <div v-if="alerts.length > 0" class="alert-banner">
+          <div class="alert-banner-inner">
+            <div class="alert-banner-content">
+              <span class="alert-icon">⚠️</span>
+              <span class="alert-title">渠道异常警告：</span>
+              <span class="alert-channel font-mono">[{{ alerts[0].channelName }}]</span>
+              <span class="alert-reason">{{ alerts[0].reason }}</span>
+              <span v-if="alerts[0].occurCount > 1" class="badge badge-warning">发生 {{ alerts[0].occurCount }} 次</span>
+              <span class="alert-hint">（网关已自动无缝切换备用通道）</span>
+            </div>
+            <div class="alert-banner-actions">
+              <button class="btn btn-xs btn-secondary" @click="handleDismissAlert(alerts[0].id)">✕ 忽略</button>
+              <button v-if="alerts.length > 1" class="btn btn-xs btn-danger" @click="handleClearAllAlerts">全部清除 ({{ alerts.length }})</button>
+            </div>
+          </div>
+        </div>
       </transition>
-    </main>
+
+      <!-- 核心页面视图挂载区 -->
+      <main class="content-container">
+        <transition name="view-fade" mode="out-in">
+          <DashboardView 
+            v-if="currentTab === 'dashboard'" 
+            :summary="summary" 
+            :recent-logs="logs"
+            @navigate="currentTab = $event"
+          />
+
+          <ChannelsView 
+            v-else-if="currentTab === 'channels'" 
+            :channels="channels"
+            @refresh="loadAllData"
+            @toast="showToast"
+          />
+
+          <LogsView 
+            v-else-if="currentTab === 'logs'" 
+            :logs="logs"
+            @refresh="loadLogsAndSummary"
+            @toast="showToast"
+          />
+
+          <TokenStatsView 
+            v-else-if="currentTab === 'tokens'" 
+            @toast="showToast"
+          />
+
+          <PlaygroundView 
+            v-else-if="currentTab === 'playground'" 
+            @toast="showToast"
+          />
+
+          <GuideView 
+            v-else-if="currentTab === 'guide'" 
+            @toast="showToast"
+            @open-settings="showSettingsModal = true"
+          />
+        </transition>
+      </main>
+    </div>
 
     <!-- 系统设置与一键接管弹窗 -->
     <SettingsModal 
@@ -92,8 +132,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
-import Header from './components/Header.vue';
+import { ref, reactive, watch, onMounted } from 'vue';
+import Sidebar from './components/Sidebar.vue';
 import Toast from './components/Toast.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import DesktopPet from './components/DesktopPet.vue';
@@ -118,6 +158,12 @@ const currentTab = ref('dashboard');
 const showSettingsModal = ref(false);
 const toastRef = ref(null);
 
+// 侧边栏折叠状态持久化
+const isSidebarCollapsed = ref(localStorage.getItem('sidebar_collapsed') === 'true');
+watch(isSidebarCollapsed, (val) => {
+  localStorage.setItem('sidebar_collapsed', val ? 'true' : 'false');
+});
+
 const channels = ref([]);
 const logs = ref([]);
 const alerts = ref([]);
@@ -132,6 +178,33 @@ const summary = reactive({
   successRate: 100,
   currentPrimaryChannelName: ''
 });
+
+function getViewCategory(tab) {
+  switch (tab) {
+    case 'dashboard':
+    case 'channels':
+    case 'logs':
+    case 'tokens':
+      return '网关路由与监控';
+    case 'playground':
+    case 'guide':
+      return '开发与集成测试';
+    default:
+      return '控制台';
+  }
+}
+
+function getViewTitle(tab) {
+  switch (tab) {
+    case 'dashboard': return '仪表盘概览';
+    case 'channels': return '模型渠道与调度管理';
+    case 'logs': return '实时请求与全链路追踪';
+    case 'tokens': return 'Token 消耗与 Prompt 缓存分析';
+    case 'playground': return '内置 Web 调试沙箱';
+    case 'guide': return 'IDE 客户端无缝接管指引';
+    default: return '模型故障转移网关';
+  }
+}
 
 function showToast(msg, type = 'info') {
   toastRef.value?.show(msg, type);
@@ -165,9 +238,7 @@ async function loadAlerts() {
   try {
     const res = await api.getNotifications();
     alerts.value = res || [];
-  } catch (err) {
-    // 静默忽略轮询错误
-  }
+  } catch (err) { }
 }
 
 async function handleDismissAlert(id) {
@@ -196,7 +267,6 @@ async function loadAllData() {
 
 onMounted(() => {
   loadAllData();
-  // 每 3 秒静默同步一次告警与概览数据
   setInterval(() => {
     loadLogsAndSummary();
     loadAlerts();
@@ -205,51 +275,145 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.app-layout {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.main-content {
-  flex: 1;
-  max-width: 1280px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-/* ⚠️ 全局顶部告警横幅样式 */
-.alert-top-bar {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.2), rgba(245, 158, 11, 0.2));
-  border-bottom: 1px solid rgba(239, 68, 68, 0.35);
-  backdrop-filter: blur(8px);
-  padding: 10px 24px;
-  position: relative;
-  z-index: 90;
-}
-
-.alert-top-container {
-  max-width: 1440px;
-  margin: 0 auto;
+/* 顶部 Topbar 风格 */
+.top-nav-bar {
+  height: 58px;
+  min-height: 58px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
-.alert-content {
+.top-nav-left {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: var(--text-main);
-  flex-wrap: wrap;
 }
 
-.alert-icon {
-  font-size: 16px;
-  line-height: 1;
+.topbar-collapse-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  margin-right: 4px;
+}
+
+.topbar-collapse-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  border-color: var(--border-medium);
+}
+
+.view-tag {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.nav-slash {
+  color: var(--border-medium);
+  font-size: 13px;
+}
+
+.view-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+
+.top-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.pill-label {
+  color: var(--text-dim);
+}
+
+.pill-val {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.pill-divider {
+  width: 1px;
+  height: 10px;
+  background: var(--border-medium);
+}
+
+.primary-channel-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  max-width: 200px;
+}
+
+.pill-channel-name {
+  color: #a5b4fc;
+  font-weight: 500;
+}
+
+/* 告警横幅 */
+.alert-banner {
+  background: linear-gradient(90deg, rgba(244, 63, 94, 0.15), rgba(245, 158, 11, 0.15));
+  border-bottom: 1px solid rgba(244, 63, 94, 0.3);
+  padding: 8px 32px;
+}
+
+.alert-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.alert-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
 }
 
 .alert-title {
@@ -258,82 +422,43 @@ onMounted(() => {
 }
 
 .alert-channel {
+  color: var(--accent-primary);
   font-weight: 600;
-  color: var(--warning);
 }
 
 .alert-reason {
   color: var(--text-main);
 }
 
-.alert-tip {
-  font-size: 12px;
+.alert-hint {
   color: var(--text-dim);
 }
 
-.alert-actions {
+.alert-banner-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.alert-dismiss-btn,
-.alert-clear-all-btn {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--text-main);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.alert-dismiss-btn:hover {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-}
-
-.alert-clear-all-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.banner-slide-enter-active,
-.banner-slide-leave-active {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.banner-slide-enter-from,
-.banner-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-100%);
-}
-
+/* 视图转场 */
 .view-fade-enter-active,
 .view-fade-leave-active {
-  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .view-fade-enter-from {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(4px);
 }
 
 .view-fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-4px);
 }
 
-/* 🐾 独立画中画/桌面小窗画布 */
 .pet-standalone-canvas {
   width: 100vw;
   height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #0f172a;
   overflow: hidden;
+  background: transparent;
 }
 </style>

@@ -326,6 +326,8 @@ public class ProxyEngine : IProxyEngine
             }
         }
 
+        var logId = Guid.NewGuid().ToString("N");
+
         // 0. 获取网关全局设置并校验网关安全访问鉴权 (如果开启了 RequireAuth)
         var gatewaySettings = GetGatewaySettings();
         if (IsGatewayAuthRequired(context, gatewaySettings, out var authError))
@@ -336,12 +338,15 @@ public class ProxyEngine : IProxyEngine
 
             _logService.AddLog(new ProxyLogEntry
             {
+                Id = logId,
                 ClientIp = clientIp,
                 RequestMethod = requestMethod,
                 RequestPath = rawPath,
                 StatusCode = 401,
+                Status = "FAILED",
                 DurationMs = stopwatch.ElapsedMilliseconds,
-                ErrorDetails = authError
+                ErrorDetails = authError,
+                ResponseBody = authError
             });
             return;
         }
@@ -361,6 +366,17 @@ public class ProxyEngine : IProxyEngine
                 _logger.LogInformation("已自动剔除请求体中携带的加密推理数据 (encrypted_content)，保障跨渠道与中转环境兼容性");
                 rawRequestBody = sanitizedBody;
             }
+        }
+
+        // 截取请求载荷供日志查看与审计排查（安全截断保护，支持还原 Prompt/Messages）
+        string? safeRequestBodyText = null;
+        if (rawRequestBody.Length > 0)
+        {
+            try
+            {
+                safeRequestBodyText = Encoding.UTF8.GetString(rawRequestBody[..Math.Min(rawRequestBody.Length, 65536)]);
+            }
+            catch { }
         }
 
         // 采集客户端安全请求头（脱敏敏感鉴权字段）用于日志排查与渠道嗅探提取
@@ -401,6 +417,18 @@ public class ProxyEngine : IProxyEngine
             }
         }
 
+        // 1.2 请求进入处理管线：立即在系统中注册初始日志条目（初始状态为 PENDING 运行中，支持前端长任务实时感知）
+        _logService.StartLog(new ProxyLogEntry
+        {
+            Id = logId,
+            ClientIp = clientIp,
+            RequestMethod = requestMethod,
+            RequestPath = rawPath,
+            Model = requestedModel,
+            RequestBody = safeRequestBodyText,
+            RequestHeaders = clientHeadersForLog
+        });
+
         // 2. 获取当前所有可用的激活渠道，并按请求分组过滤
         var allChannels = await _channelService.GetAllAsync();
         var activeChannels = allChannels
@@ -429,16 +457,16 @@ public class ProxyEngine : IProxyEngine
                 : $"分组 [{requestedGroup}] 下没有可用或启用的模型渠道，请在 Web 面板配置对应分组渠道";
             await context.Response.WriteAsync($"{{\"error\": {{\"message\": \"{errMsg}\"}}}}");
 
-            _logService.AddLog(new ProxyLogEntry
-            {
-                ClientIp = clientIp,
-                RequestMethod = requestMethod,
-                RequestPath = rawPath,
-                Model = requestedModel,
-                StatusCode = 503,
-                DurationMs = stopwatch.ElapsedMilliseconds,
-                ErrorDetails = errMsg
-            });
+            _logService.CompleteLog(
+                logId, 
+                503, 
+                "FAILED", 
+                stopwatch.ElapsedMilliseconds, 
+                new List<string>(), 
+                null, 
+                false, 
+                errMsg, 
+                errMsg);
             return;
         }
 
@@ -580,27 +608,23 @@ public class ProxyEngine : IProxyEngine
                         stopwatch.Stop();
                         await WriteFullResponseAsync(context, upstreamResponse, errorBytes);
                         
-                        _logService.AddLog(new ProxyLogEntry
-                        {
-                            ClientIp = clientIp,
-                            RequestMethod = requestMethod,
-                            RequestPath = rawPath,
-                            Model = requestedModel,
-                            TriedChannels = triedChannels,
-                            FinalChannel = channelLabel,
-                            StatusCode = (int)upstreamResponse.StatusCode,
-                            DurationMs = stopwatch.ElapsedMilliseconds,
-                            IsFailover = isFailoverOccurred,
-                            ErrorDetails = errorText,
-                            RequestHeaders = clientHeadersForLog
-                        });
+                        _logService.CompleteLog(
+                            logId,
+                            (int)upstreamResponse.StatusCode,
+                            "FAILED",
+                            stopwatch.ElapsedMilliseconds,
+                            triedChannels,
+                            channelLabel,
+                            isFailoverOccurred,
+                            errorText,
+                            errorText.Length > 20000 ? errorText[..20000] : errorText);
                         return;
                     }
 
                     // 8. 成功响应：100% 字节管道直通（保持 SSE 打字机流式输出）
                     await _channelService.MarkSuccessAsync(channel.Id);
                     
-                    await StreamPipeResponseWithTokenTrackingAsync(
+                    var (isStreamError, streamErrorDetails, sampleText, promptTokens, completionTokens) = await StreamPipeResponseWithTokenTrackingAsync(
                         context, 
                         upstreamResponse, 
                         channel.Id, 
@@ -613,19 +637,18 @@ public class ProxyEngine : IProxyEngine
 
                     stopwatch.Stop();
 
-                    _logService.AddLog(new ProxyLogEntry
-                    {
-                        ClientIp = clientIp,
-                        RequestMethod = requestMethod,
-                        RequestPath = rawPath,
-                        Model = requestedModel,
-                        TriedChannels = triedChannels,
-                        FinalChannel = channelLabel,
-                        StatusCode = (int)upstreamResponse.StatusCode,
-                        DurationMs = stopwatch.ElapsedMilliseconds,
-                        IsFailover = isFailoverOccurred,
-                        RequestHeaders = clientHeadersForLog
-                    });
+                    _logService.CompleteLog(
+                        logId,
+                        isStreamError ? 400 : (int)upstreamResponse.StatusCode,
+                        isStreamError ? "FAILED" : "SUCCESS",
+                        stopwatch.ElapsedMilliseconds,
+                        triedChannels,
+                        channelLabel,
+                        isFailoverOccurred,
+                        isStreamError ? streamErrorDetails : null,
+                        sampleText.Length > 20000 ? sampleText[..20000] : sampleText,
+                        promptTokens,
+                        completionTokens);
 
                     channelSuccess = true;
                     return;
@@ -656,11 +679,12 @@ public class ProxyEngine : IProxyEngine
 
         // 9. 所有渠道均尝试失败
         stopwatch.Stop();
+        string failureResponse = string.Empty;
         if (!context.Response.HasStarted)
         {
             context.Response.StatusCode = StatusCodes.Status502BadGateway;
             context.Response.ContentType = "application/json";
-            var failureResponse = JsonSerializer.Serialize(new
+            failureResponse = JsonSerializer.Serialize(new
             {
                 error = new
                 {
@@ -672,20 +696,16 @@ public class ProxyEngine : IProxyEngine
             await context.Response.WriteAsync(failureResponse);
         }
 
-        _logService.AddLog(new ProxyLogEntry
-        {
-            ClientIp = clientIp,
-            RequestMethod = requestMethod,
-            RequestPath = rawPath,
-            Model = requestedModel,
-            TriedChannels = triedChannels,
-            FinalChannel = null,
-            StatusCode = 502,
-            DurationMs = stopwatch.ElapsedMilliseconds,
-            IsFailover = true,
-            ErrorDetails = lastErrorDetails ?? "所有上游渠道均不可用",
-            RequestHeaders = clientHeadersForLog
-        });
+        _logService.CompleteLog(
+            logId,
+            502,
+            "FAILED",
+            stopwatch.ElapsedMilliseconds,
+            triedChannels,
+            null,
+            true,
+            lastErrorDetails ?? "所有上游渠道均不可用",
+            failureResponse);
     }
 
     /// <summary>
@@ -756,7 +776,7 @@ public class ProxyEngine : IProxyEngine
         return list.Any(m => m.Equals(targetModel, StringComparison.OrdinalIgnoreCase) || m == "*");
     }
 
-    private async Task StreamPipeResponseWithTokenTrackingAsync(
+    private async Task<(bool isStreamError, string? streamErrorDetails, string sampleText, long promptTokens, long completionTokens)> StreamPipeResponseWithTokenTrackingAsync(
         HttpContext context,
         HttpResponseMessage upstreamResponse,
         string channelId,
@@ -806,11 +826,16 @@ public class ProxyEngine : IProxyEngine
             _logger.LogWarning(ex, "渠道 [{Channel}] 流式响应在传输中途中断 (上游连接意外关闭/EOF): {Message}", channelName, ex.Message);
         }
 
+        var sampleText = responseSampleBuilder.ToString();
+        var (isStreamError, streamErrorDetails) = DetectStreamError(sampleText);
+        long promptTokens = 0, completionTokens = 0;
+
         // 提取并在后台安全记录 Token 与触发完成事件
         try
         {
-            var sampleText = responseSampleBuilder.ToString();
-            var (promptTokens, completionTokens, cacheReadTokens, cacheCreationTokens) = ExtractTokens(sampleText, requestBodyBytes.Length, totalBytesTransferred);
+            var tokenTuple = ExtractTokens(sampleText, requestBodyBytes.Length, totalBytesTransferred);
+            promptTokens = tokenTuple.promptTokens;
+            completionTokens = tokenTuple.completionTokens;
 
             _tokenStatsService.RecordUsage(
                 channelId,
@@ -821,8 +846,8 @@ public class ProxyEngine : IProxyEngine
                 promptTokens,
                 completionTokens,
                 isStream: true,
-                cacheReadTokens: cacheReadTokens,
-                cacheCreationTokens: cacheCreationTokens);
+                cacheReadTokens: tokenTuple.cacheReadTokens,
+                cacheCreationTokens: tokenTuple.cacheCreationTokens);
 
             var (isToolCall, stopReason) = ExtractStopReason(sampleText);
 
@@ -831,7 +856,7 @@ public class ProxyEngine : IProxyEngine
                 model ?? "AI Model", 
                 channelName, 
                 stopwatch.ElapsedMilliseconds, 
-                promptTokens + completionTokens + cacheReadTokens,
+                promptTokens + completionTokens + tokenTuple.cacheReadTokens,
                 isToolCall,
                 stopReason);
         }
@@ -839,6 +864,32 @@ public class ProxyEngine : IProxyEngine
         {
             _logger.LogError(ex, "Token 统计提取与任务完成通知异常");
         }
+
+        return (isStreamError, streamErrorDetails, sampleText, promptTokens, completionTokens);
+    }
+
+    /// <summary>
+    /// 深度检测流式（SSE）传输中的业务级错误（如 event: error 或 invalid_encrypted_content），彻底解决 HTTP 200 假成功痛点
+    /// </summary>
+    private static (bool isError, string? errorMessage) DetectStreamError(string sampleText)
+    {
+        if (string.IsNullOrEmpty(sampleText)) return (false, null);
+
+        if (sampleText.Contains("\"invalid_encrypted_content\"") || 
+            sampleText.Contains("event: error") || 
+            sampleText.Contains("event:error") || 
+            sampleText.Contains("\"type\":\"error\"") || 
+            sampleText.Contains("\"type\": \"error\""))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(sampleText, @"""message""\s*:\s*""([^""]+)""");
+            if (match.Success)
+            {
+                return (true, match.Groups[1].Value);
+            }
+            return (true, "上游返回流式业务错误 (event: error)");
+        }
+
+        return (false, null);
     }
 
     /// <summary>

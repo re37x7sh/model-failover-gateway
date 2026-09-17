@@ -18,6 +18,31 @@ public class ProxyLogEntry
     public bool IsFailover { get; set; }
     public string? ErrorDetails { get; set; }
     public Dictionary<string, string>? RequestHeaders { get; set; }
+
+    /// <summary>
+    /// 请求运行状态：PENDING（进行中）、SUCCESS（成功完成）、FAILED（失败/异常）
+    /// </summary>
+    public string Status { get; set; } = "PENDING";
+
+    /// <summary>
+    /// 客户端请求体载荷内容（支持查看完整 Prompt/Messages/Input，超限安全截断）
+    /// </summary>
+    public string? RequestBody { get; set; }
+
+    /// <summary>
+    /// 响应内容摘要或流式错误提取内容
+    /// </summary>
+    public string? ResponseBody { get; set; }
+
+    /// <summary>
+    /// 输入 Prompt 消耗的 Token 数
+    /// </summary>
+    public long? PromptTokens { get; set; }
+
+    /// <summary>
+    /// 输出 Completion 消耗的 Token 数
+    /// </summary>
+    public long? CompletionTokens { get; set; }
 }
 
 /// <summary>

@@ -8,6 +8,19 @@ namespace ModelFailoverGateway.Services;
 /// </summary>
 public interface ILogService
 {
+    void StartLog(ProxyLogEntry entry);
+    void CompleteLog(
+        string logId, 
+        int statusCode, 
+        string status, 
+        long durationMs, 
+        List<string> triedChannels, 
+        string? finalChannel, 
+        bool isFailover, 
+        string? errorDetails = null, 
+        string? responseBody = null, 
+        long promptTokens = 0, 
+        long completionTokens = 0);
     void AddLog(ProxyLogEntry entry);
     List<ProxyLogEntry> GetRecentLogs(int limit = 100);
     PagedResult<ProxyLogEntry> GetPagedLogs(int page = 1, int pageSize = 50, string? filter = null, string? keyword = null);
@@ -76,6 +89,91 @@ public class LogService : ILogService, IDisposable
         }, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
     }
 
+    /// <summary>
+    /// 请求发起时立即记录（初始状态为 PENDING 运行中）
+    /// </summary>
+    public void StartLog(ProxyLogEntry entry)
+    {
+        lock (_lock)
+        {
+            entry.Status = "PENDING";
+            _logs.Add(entry);
+            _isDirty = true;
+
+            // 超限快速截断
+            if (_logs.Count > _settings.MaxCapacity * 1.5)
+            {
+                PerformCleanupUnderLock();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 请求完成或中断时原子更新运行状态、耗时与响应摘要
+    /// </summary>
+    public void CompleteLog(
+        string logId, 
+        int statusCode, 
+        string status, 
+        long durationMs, 
+        List<string> triedChannels, 
+        string? finalChannel, 
+        bool isFailover, 
+        string? errorDetails = null, 
+        string? responseBody = null, 
+        long promptTokens = 0, 
+        long completionTokens = 0)
+    {
+        lock (_lock)
+        {
+            _totalRequests++;
+            if (isFailover) _totalFailovers++;
+            if (status.Equals("SUCCESS", StringComparison.OrdinalIgnoreCase))
+            {
+                _successfulRequests++;
+            }
+            else
+            {
+                _failedRequests++;
+            }
+
+            var entry = _logs.FirstOrDefault(x => x.Id == logId);
+            if (entry != null)
+            {
+                entry.StatusCode = statusCode;
+                entry.Status = status;
+                entry.DurationMs = durationMs;
+                entry.TriedChannels = triedChannels ?? new();
+                entry.FinalChannel = finalChannel;
+                entry.IsFailover = isFailover;
+                if (!string.IsNullOrWhiteSpace(errorDetails)) entry.ErrorDetails = errorDetails;
+                if (!string.IsNullOrWhiteSpace(responseBody)) entry.ResponseBody = responseBody;
+                if (promptTokens > 0) entry.PromptTokens = promptTokens;
+                if (completionTokens > 0) entry.CompletionTokens = completionTokens;
+            }
+            else
+            {
+                // 若找不到则兜底新增
+                _logs.Add(new ProxyLogEntry
+                {
+                    Id = logId,
+                    StatusCode = statusCode,
+                    Status = status,
+                    DurationMs = durationMs,
+                    TriedChannels = triedChannels ?? new(),
+                    FinalChannel = finalChannel,
+                    IsFailover = isFailover,
+                    ErrorDetails = errorDetails,
+                    ResponseBody = responseBody,
+                    PromptTokens = promptTokens,
+                    CompletionTokens = completionTokens
+                });
+            }
+
+            _isDirty = true;
+        }
+    }
+
     public void AddLog(ProxyLogEntry entry)
     {
         lock (_lock)
@@ -85,12 +183,14 @@ public class LogService : ILogService, IDisposable
             {
                 _totalFailovers++;
             }
-            if (entry.StatusCode >= 200 && entry.StatusCode < 400)
+            if (entry.StatusCode >= 200 && entry.StatusCode < 400 && !string.Equals(entry.Status, "FAILED", StringComparison.OrdinalIgnoreCase))
             {
+                entry.Status = "SUCCESS";
                 _successfulRequests++;
             }
             else
             {
+                entry.Status = "FAILED";
                 _failedRequests++;
             }
 
@@ -126,24 +226,29 @@ public class LogService : ILogService, IDisposable
 
             var query = _logs.AsEnumerable();
 
-            // 1. 状态过滤 (all / failover / error / success)
+            // 1. 状态过滤 (all / pending / success / error / failover)
             if (!string.IsNullOrWhiteSpace(filter) && !filter.Equals("all", StringComparison.OrdinalIgnoreCase))
             {
-                if (filter.Equals("failover", StringComparison.OrdinalIgnoreCase))
+                if (filter.Equals("pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(x => x.Status.Equals("PENDING", StringComparison.OrdinalIgnoreCase));
+                }
+                else if (filter.Equals("failover", StringComparison.OrdinalIgnoreCase))
                 {
                     query = query.Where(x => x.IsFailover);
                 }
-                else if (filter.Equals("error", StringComparison.OrdinalIgnoreCase))
+                else if (filter.Equals("error", StringComparison.OrdinalIgnoreCase) || filter.Equals("failed", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(x => x.StatusCode >= 400);
+                    query = query.Where(x => x.Status.Equals("FAILED", StringComparison.OrdinalIgnoreCase) || x.StatusCode >= 400);
                 }
                 else if (filter.Equals("success", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(x => x.StatusCode >= 200 && x.StatusCode < 400);
+                    query = query.Where(x => x.Status.Equals("SUCCESS", StringComparison.OrdinalIgnoreCase) || 
+                                            (x.StatusCode >= 200 && x.StatusCode < 400 && !x.Status.Equals("FAILED", StringComparison.OrdinalIgnoreCase) && !x.Status.Equals("PENDING", StringComparison.OrdinalIgnoreCase)));
                 }
             }
 
-            // 2. 关键字搜索 (路径 / 模型 / 最终渠道 / 尝试渠道 / 状态码 / 错误信息)
+            // 2. 关键字搜索 (路径 / 模型 / 最终渠道 / 尝试渠道 / 状态码 / 错误信息 / 请求载荷 / 响应摘要)
             if (!string.IsNullOrWhiteSpace(keyword))
             {
                 var kw = keyword.Trim();
@@ -152,8 +257,11 @@ public class LogService : ILogService, IDisposable
                     (x.Model != null && x.Model.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
                     (x.FinalChannel != null && x.FinalChannel.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
                     (x.ErrorDetails != null && x.ErrorDetails.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.RequestBody != null && x.RequestBody.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                    (x.ResponseBody != null && x.ResponseBody.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
                     (x.TriedChannels != null && x.TriedChannels.Any(tc => tc.Contains(kw, StringComparison.OrdinalIgnoreCase))) ||
-                    x.StatusCode.ToString().Contains(kw)
+                    x.StatusCode.ToString().Contains(kw) ||
+                    x.Status.Contains(kw, StringComparison.OrdinalIgnoreCase)
                 );
             }
 
@@ -365,7 +473,20 @@ public class LogService : ILogService, IDisposable
             lock (_lock)
             {
                 _logs.Clear();
-                _logs.AddRange(loadedLogs.OrderBy(x => x.Timestamp));
+                foreach (var item in loadedLogs)
+                {
+                    // 历史数据平滑迁移：若无明确状态或默认 PENDING 但已有状态码，则自愈补齐为实际完成状态
+                    if (string.IsNullOrEmpty(item.Status) || item.Status == "PENDING")
+                    {
+                        if (item.StatusCode > 0)
+                        {
+                            item.Status = (item.StatusCode >= 200 && item.StatusCode < 400) ? "SUCCESS" : "FAILED";
+                        }
+                    }
+                    _logs.Add(item);
+                }
+
+                _logs.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
                 _totalRequests = _logs.Count;
                 _totalFailovers = _logs.Count(x => x.IsFailover);
                 _successfulRequests = _logs.Count(x => x.StatusCode >= 200 && x.StatusCode < 400);
