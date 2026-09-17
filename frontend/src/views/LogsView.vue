@@ -279,9 +279,10 @@
                             <button 
                               v-if="log.requestBody" 
                               class="btn btn-secondary btn-xs" 
-                              @click="copyText(formatJsonString(log.requestBody), '请求载荷已复制')"
+                              @click="downloadJson(log.requestBody, `request-payload-${log.id || 'body'}.json`)"
+                              title="下载客户端请求体 JSON 文件"
                             >
-                              📋 复制 JSON
+                              📥 下载 JSON
                             </button>
                           </div>
                           <div v-if="log.requestBody" class="code-viewer font-mono">
@@ -667,6 +668,26 @@ async function copyText(text, successMsg = '已复制') {
     emit('toast', successMsg, 'success');
   } catch {
     emit('toast', '复制失败，请手动选择复制', 'error');
+  }
+}
+
+// 下载 JSON 文本为本地文件
+function downloadJson(jsonContent, defaultFilename = 'request-payload.json') {
+  if (!jsonContent) return;
+  try {
+    const formatted = formatJsonString(jsonContent);
+    const blob = new Blob([formatted], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = defaultFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    emit('toast', `已触发下载: ${defaultFilename}`, 'success');
+  } catch (err) {
+    emit('toast', `下载失败: ${err.message}`, 'error');
   }
 }
 
