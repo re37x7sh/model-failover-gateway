@@ -128,9 +128,14 @@
       </div>
 
       <div v-else class="logs-container glass-card">
-        <div class="table-responsive">
+        <!-- 局部独立滚动视口（向下滑动只滚动框选区域并动态加载） -->
+        <div 
+          class="table-scroll-viewport" 
+          ref="tableScrollViewportRef" 
+          @scroll="handleTableScroll"
+        >
           <table class="data-table">
-            <thead>
+            <thead class="sticky-thead">
               <tr>
                 <th style="width: 105px;">请求状态</th>
                 <th style="width: 110px;">发起时间</th>
@@ -336,41 +341,49 @@
               </template>
             </tbody>
           </table>
-        </div>
 
-        <!-- 底部精致分页器 -->
-        <div class="pagination-footer">
-          <div class="page-meta">
-            <span>共 <strong class="text-primary font-mono">{{ totalCount }}</strong> 条日志，</span>
-            <span>第 <strong class="font-mono">{{ currentPage }}</strong> / <strong class="font-mono">{{ totalPages }}</strong> 页</span>
-            <div class="page-size-wrap">
-              <span class="size-txt">每页:</span>
-              <select :value="pageSize" @change="onPageSizeChange(Number($event.target.value))" class="form-select size-select font-mono">
-                <option :value="20">20 条</option>
-                <option :value="50">50 条</option>
-                <option :value="100">100 条</option>
-                <option :value="200">200 条</option>
-              </select>
+          <!-- 触底动态加载指示栏 -->
+          <div class="scroll-load-indicator">
+            <div v-if="loadingMore" class="loading-more-box">
+              <span class="mini-spinner"></span>
+              <span class="load-text">正在向下滑动动态加载下一批日志...</span>
+            </div>
+            <div v-else-if="pagedLogs.length >= totalCount && totalCount > 0" class="loaded-all-box">
+              <span class="check-dot">✓</span>
+              <span>已向下滑动加载全部 {{ totalCount }} 条历史记录</span>
+            </div>
+            <div v-else-if="pagedLogs.length > 0 && pagedLogs.length < totalCount" class="scroll-more-hint">
+              <span>↓ 继续向下滑动自动加载下一批 15 条日志</span>
             </div>
           </div>
+        </div>
 
-          <div class="page-nav-btns">
-            <button class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="goToPage(1)">« 首页</button>
-            <button class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">‹ 上一页</button>
-            
-            <template v-for="(p, idx) in visiblePages" :key="idx">
-              <span v-if="p === '...'" class="page-dots text-dim">...</span>
-              <button 
-                v-else 
-                :class="['page-number-btn font-mono', { active: p === currentPage }]" 
-                @click="goToPage(p)"
-              >
-                {{ p }}
-              </button>
-            </template>
+        <!-- 底部轻量信息与快速回顶栏 -->
+        <div class="scroll-footer-bar">
+          <div class="scroll-footer-left">
+            <span>已动态展示 <strong class="text-primary font-mono">{{ pagedLogs.length }}</strong> / 共 <strong class="font-mono">{{ totalCount }}</strong> 条请求日志</span>
+            <span v-if="loadingMore" class="badge badge-pending font-mono">加载中...</span>
+            <span class="scroll-hint-tip">💡 默认展示 15 条，向下滑动仅在框选区域内局部滚动并动态加载</span>
+          </div>
 
-            <button class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一页 ›</button>
-            <button class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">末页 »</button>
+          <div class="scroll-footer-right">
+            <button 
+              v-if="pagedLogs.length > 15" 
+              class="btn btn-secondary btn-xs" 
+              @click="scrollToTop"
+              title="快速返回表格顶部"
+            >
+              <span>▲ 回到顶部</span>
+            </button>
+            <button 
+              v-if="pagedLogs.length < totalCount" 
+              class="btn btn-secondary btn-xs" 
+              :disabled="loadingMore" 
+              @click="loadMoreLogs"
+              title="也可手动点击加载下一批 15 条"
+            >
+              <span>{{ loadingMore ? '加载中...' : '加载更多 15 条 ↓' }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -506,8 +519,10 @@ const activeViewMode = ref('requests');
 const pagedLogs = ref([]);
 const totalCount = ref(0);
 const currentPage = ref(1);
-const pageSize = ref(50);
+const pageSize = ref(15); // 默认展示 15 条数据
 const loading = ref(false);
+const loadingMore = ref(false);
+const tableScrollViewportRef = ref(null);
 
 const currentFilter = ref('all');
 const searchKeyword = ref('');
@@ -605,30 +620,106 @@ async function copyText(text, successMsg = '已复制') {
   }
 }
 
-// 拉取分页请求日志与全网概览指标
-async function fetchLogs() {
-  loading.value = true;
+// 拉取分页请求日志与全网概览指标（默认加载首屏 15 条，支持自动轮询静默更新）
+async function fetchLogs(isAutoPoll = false) {
+  if (!isAutoPoll) {
+    loading.value = true;
+    currentPage.value = 1;
+  }
+
   try {
     const [res, s] = await Promise.all([
       api.getPagedLogs(
-        currentPage.value,
+        1,
         pageSize.value,
         currentFilter.value,
         searchKeyword.value.trim()
       ),
       api.getSummary()
     ]);
+
     if (res) {
-      pagedLogs.value = res.items || [];
       totalCount.value = res.totalCount || 0;
+      if (!isAutoPoll) {
+        pagedLogs.value = res.items || [];
+        if (tableScrollViewportRef.value) {
+          tableScrollViewportRef.value.scrollTop = 0;
+        }
+      } else {
+        // 定时自动轮询：
+        // 1. 如果用户停留在前 15 条内，直接静默更新最新数据
+        if (currentPage.value === 1 && pagedLogs.value.length <= pageSize.value) {
+          pagedLogs.value = res.items || [];
+        } else if (res.items && res.items.length > 0 && pagedLogs.value.length > 0) {
+          // 2. 如果用户已经向下滚动加载了更多批次，检查是否有新进来的请求，仅将最新条目置顶追加
+          const currentFirstId = pagedLogs.value[0].id;
+          const newIdx = res.items.findIndex(item => item.id === currentFirstId);
+          if (newIdx > 0) {
+            const freshItems = res.items.slice(0, newIdx);
+            pagedLogs.value.unshift(...freshItems);
+          }
+        }
+      }
     }
+
     if (s) {
       Object.assign(summaryMetrics, s);
     }
   } catch (err) {
     console.error('拉取请求日志失败:', err);
   } finally {
-    loading.value = false;
+    if (!isAutoPoll) {
+      loading.value = false;
+    }
+  }
+}
+
+// 向下滑动时动态加载下一批 15 条日志
+async function loadMoreLogs() {
+  if (loadingMore.value || loading.value) return;
+  if (pagedLogs.value.length >= totalCount.value) return;
+
+  loadingMore.value = true;
+  const nextPage = currentPage.value + 1;
+  try {
+    const res = await api.getPagedLogs(
+      nextPage,
+      pageSize.value,
+      currentFilter.value,
+      searchKeyword.value.trim()
+    );
+    if (res && res.items && res.items.length > 0) {
+      currentPage.value = nextPage;
+      // 按照 ID 去重并追加到当前列表末尾
+      const existingIds = new Set(pagedLogs.value.map(l => l.id));
+      const newItems = res.items.filter(l => !existingIds.has(l.id));
+      pagedLogs.value.push(...newItems);
+      totalCount.value = res.totalCount || totalCount.value;
+    } else {
+      totalCount.value = pagedLogs.value.length;
+    }
+  } catch (err) {
+    console.error('动态加载更多日志失败:', err);
+  } finally {
+    loadingMore.value = false;
+  }
+}
+
+// 监听框选区域的独立滚动（触底自动动态加载）
+function handleTableScroll(e) {
+  const el = e.target;
+  // 当向下滑动距离底部小于等于 80px 时自动预加载下一批
+  if (el.scrollHeight - el.scrollTop - el.clientHeight <= 80) {
+    if (pagedLogs.value.length < totalCount.value && !loadingMore.value && !loading.value) {
+      loadMoreLogs();
+    }
+  }
+}
+
+// 快速回到表格顶部
+function scrollToTop() {
+  if (tableScrollViewportRef.value) {
+    tableScrollViewportRef.value.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
@@ -742,7 +833,7 @@ function startPolling() {
   stopPolling();
   pollTimer = setInterval(() => {
     if (!loading.value && activeViewMode.value === 'requests') {
-      fetchLogs();
+      fetchLogs(true);
     }
   }, 2000);
 }
@@ -1064,14 +1155,20 @@ onUnmounted(() => {
   to { transform: rotate(360deg); }
 }
 
-/* 表格容器 */
+/* 表格容器与局部独立滚动视口（只滑动框选区域） */
 .logs-container {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.table-responsive {
+.table-scroll-viewport {
   width: 100%;
+  max-height: clamp(480px, calc(100vh - 360px), 660px);
+  overflow-y: auto;
   overflow-x: auto;
+  position: relative;
+  scroll-behavior: smooth;
 }
 
 .data-table {
@@ -1079,6 +1176,21 @@ onUnmounted(() => {
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
+}
+
+.sticky-thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 12px 14px;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  box-shadow: 0 1px 0 var(--border-subtle);
 }
 
 .data-table th {
@@ -1387,72 +1499,82 @@ onUnmounted(() => {
   margin-top: 12px;
 }
 
-/* 分页器 */
-.pagination-footer {
-  padding: 12px 16px;
+/* 触底动态加载指示栏 */
+.scroll-load-indicator {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.05);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.loading-more-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.mini-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.loaded-all-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+
+.check-dot {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.scroll-more-hint {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* 底部轻量信息与快速回顶栏 */
+.scroll-footer-bar {
+  padding: 10px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--border-subtle);
-  flex-wrap: wrap;
+  background: var(--bg-surface);
+  font-size: 12px;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-.page-meta {
+.scroll-footer-left {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 10px;
   color: var(--text-muted);
+  flex-wrap: wrap;
 }
 
-.page-size-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 12px;
-}
-
-.size-select {
-  padding: 2px 6px;
+.scroll-hint-tip {
   font-size: 11px;
-  width: auto;
+  color: var(--text-dim);
 }
 
-.page-nav-btns {
+.scroll-footer-right {
   display: flex;
   align-items: center;
-  gap: 4px;
-}
-
-.page-number-btn {
-  min-width: 26px;
-  height: 26px;
-  padding: 0 6px;
-  font-size: 12px;
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.page-number-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-main);
-}
-
-.page-number-btn.active {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: #ffffff;
-  font-weight: 700;
-}
-
-.page-dots {
-  font-size: 12px;
-  padding: 0 4px;
+  gap: 8px;
 }
 
 /* ================= 模式 2: 系统控制台视窗 ================= */
@@ -1909,5 +2031,20 @@ input:checked + .slider:before {
 :global(body.light) .slider:before {
   background-color: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+:global(body.light) .sticky-thead th {
+  background: #f8fafc !important;
+  box-shadow: 0 1px 0 #e2e8f0;
+}
+
+:global(body.light) .scroll-load-indicator {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .scroll-footer-bar {
+  background: #ffffff;
+  border-color: #e2e8f0;
 }
 </style>
