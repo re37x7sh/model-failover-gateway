@@ -2,9 +2,12 @@ Add-Type -AssemblyName System.Windows.Forms
 
 $scriptDir = $PSScriptRoot
 $targetVbs = Join-Path $scriptDir "run-tray.vbs"
-$iconExe = Join-Path $scriptDir "backend\bin\Debug\net10.0-windows\ModelFailoverGateway.exe"
+$iconExe = Join-Path $scriptDir "ModelFailoverGateway.exe"
 if (-not (Test-Path $iconExe)) {
-    $iconExe = Join-Path $scriptDir "ModelFailoverGateway.exe"
+    $iconExe = Join-Path $scriptDir "..\backend\bin\Debug\net10.0-windows\ModelFailoverGateway.exe"
+}
+if (-not (Test-Path $iconExe)) {
+    $iconExe = Join-Path $scriptDir "backend\bin\Debug\net10.0-windows\ModelFailoverGateway.exe"
 }
 
 $startup = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Startup)

@@ -5,9 +5,12 @@ $targetVbs = Join-Path $scriptDir "run-ui.vbs"
 if (-not (Test-Path $targetVbs)) {
     $targetVbs = Join-Path $scriptDir "run-tray.vbs"
 }
-$iconExe = Join-Path $scriptDir "backend\bin\Debug\net10.0-windows\ModelFailoverGateway.exe"
+$iconExe = Join-Path $scriptDir "ModelFailoverGateway.exe"
 if (-not (Test-Path $iconExe)) {
-    $iconExe = Join-Path $scriptDir "ModelFailoverGateway.exe"
+    $iconExe = Join-Path $scriptDir "..\backend\bin\Debug\net10.0-windows\ModelFailoverGateway.exe"
+}
+if (-not (Test-Path $iconExe)) {
+    $iconExe = Join-Path $scriptDir "backend\bin\Debug\net10.0-windows\ModelFailoverGateway.exe"
 }
 
 $desktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
