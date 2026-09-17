@@ -116,12 +116,38 @@
               <span v-else-if="channel.failCount > 0" class="badge badge-danger">
                 连续失败 {{ channel.failCount }} 次
               </span>
-              <span v-if="channel.lastFailureReason" class="badge badge-warning" :title="channel.lastFailureReason">
-                {{ channel.lastFailureReason }}
-              </span>
-              <span v-if="testResults[channel.id]" :class="['badge', testResults[channel.id].success ? 'badge-success' : 'badge-danger']">
+              <span v-if="testResults[channel.id]" :class="['badge', 'test-result-badge', testResults[channel.id].success ? 'badge-success' : 'badge-danger']" :title="testResults[channel.id].message">
                 {{ testResults[channel.id].message }}
               </span>
+            </div>
+
+            <!-- 最近一次调用报错/失败原因专属横条（带展开折叠与一键复制，防撑爆容器） -->
+            <div v-if="channel.lastFailureReason" class="channel-failure-alert">
+              <div class="failure-alert-main" @click="toggleFailureExpand(channel.id)" :title="channel.lastFailureReason">
+                <span class="failure-alert-icon">⚠️</span>
+                <span class="failure-alert-tag">最近报错:</span>
+                <span :class="['failure-alert-msg', { expanded: expandedFailures[channel.id] }]">
+                  {{ channel.lastFailureReason }}
+                </span>
+              </div>
+              <div class="failure-alert-actions">
+                <button 
+                  type="button"
+                  class="btn-text-action" 
+                  @click="toggleFailureExpand(channel.id)" 
+                  :title="expandedFailures[channel.id] ? '收起详情' : '展开查看完整错误详情'"
+                >
+                  {{ expandedFailures[channel.id] ? '收起' : '展开' }}
+                </button>
+                <button 
+                  type="button"
+                  class="icon-btn copy-alert-btn" 
+                  @click.stop="copyText(channel.lastFailureReason, '失败原因已复制到剪贴板')" 
+                  title="复制完整失败信息"
+                >
+                  📋
+                </button>
+              </div>
             </div>
 
             <div class="channel-details-grid">
@@ -417,6 +443,11 @@ const showKeyMap = reactive({});
 const testResults = reactive({});
 const testingChannelId = ref(null);
 const testingAll = ref(false);
+const expandedFailures = reactive({});
+
+function toggleFailureExpand(channelId) {
+  expandedFailures[channelId] = !expandedFailures[channelId];
+}
 
 const activeGroupTab = ref('all_groups');
 const groupTabs = [
@@ -1045,6 +1076,8 @@ async function confirmDelete(channel) {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .channel-card.primary {
@@ -1062,12 +1095,14 @@ async function confirmDelete(channel) {
   align-items: center;
   gap: 20px;
   flex: 1;
+  min-width: 0;
 }
 
 .priority-box {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .priority-badge {
@@ -1128,8 +1163,9 @@ async function confirmDelete(channel) {
 .channel-info {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex: 1;
+  min-width: 0;
 }
 
 .channel-title-row {
@@ -1137,12 +1173,106 @@ async function confirmDelete(channel) {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .channel-name {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-main);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-result-badge {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 失败原因专属警示横条 */
+.channel-failure-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: #f59e0b;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.failure-alert-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.failure-alert-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.failure-alert-tag {
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.failure-alert-msg {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failure-alert-msg.expanded {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.failure-alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-text-action {
+  background: transparent;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.btn-text-action:hover {
+  text-decoration: underline;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.copy-alert-btn {
+  font-size: 11px;
+  padding: 2px 4px;
 }
 
 .channel-details-grid {
@@ -1151,12 +1281,14 @@ async function confirmDelete(channel) {
   gap: 16px;
   flex-wrap: wrap;
   font-size: 12px;
+  min-width: 0;
 }
 
 .detail-item {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .detail-label {
@@ -1167,6 +1299,7 @@ async function confirmDelete(channel) {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .icon-btn {
@@ -1186,6 +1319,7 @@ async function confirmDelete(channel) {
   display: flex;
   align-items: center;
   gap: 20px;
+  flex-shrink: 0;
 }
 
 .switch-box {
@@ -1532,5 +1666,18 @@ async function confirmDelete(channel) {
 :global(body.light) .modal-container {
   background: #ffffff;
   border-color: #e2e8f0;
+}
+
+:global(body.light) .channel-failure-alert {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+:global(body.light) .failure-alert-tag {
+  color: #b45309;
+}
+
+:global(body.light) .failure-alert-msg {
+  color: #78350f;
 }
 </style>
