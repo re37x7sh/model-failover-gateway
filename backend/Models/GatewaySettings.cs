@@ -19,4 +19,10 @@ public class GatewaySettings
     /// 渠道负载均衡与调度策略（priority 优先级主备、round_robin 轮询分流、random 随机分流）
     /// </summary>
     public string LoadBalancingStrategy { get; set; } = "priority";
+
+    /// <summary>
+    /// 是否自动剔除请求中的加密推理数据（encrypted_content），避免跨渠道/跨账号报 invalid_encrypted_content
+    /// </summary>
+    public bool StripEncryptedContent { get; set; } = true;
 }
+

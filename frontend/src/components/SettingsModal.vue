@@ -268,6 +268,18 @@
               </select>
             </div>
 
+            <!-- 自动剔除请求加密数据 (解决 invalid_encrypted_content 平台报错) -->
+            <div class="setting-row" style="margin-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); padding-top: 12px;">
+              <div class="setting-info">
+                <span class="setting-name">🧹 自动剔除请求中的加密推理数据 (去除 encrypted_content)</span>
+                <span class="setting-hint">强烈推荐开启。转发前自动过滤请求体中携带的不可解密推理密文，彻底避免多渠道轮询、多Key容灾或第三方中转分流时触发 <code>invalid_encrypted_content</code> 错误。</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="gatewaySettings.stripEncryptedContent" />
+                <span class="slider"></span>
+              </label>
+            </div>
+
             <div class="auth-action-row">
               <button class="btn btn-primary btn-sm" @click="saveAuthSettings" :disabled="savingAuth">
                 <span>{{ savingAuth ? '保存中...' : '💾 保存网关全局设置' }}</span>
@@ -495,7 +507,8 @@ const sysStatus = reactive({
 const gatewaySettings = reactive({
   requireAuth: false,
   authToken: '',
-  loadBalancingStrategy: 'priority'
+  loadBalancingStrategy: 'priority',
+  stripEncryptedContent: true
 });
 const savingAuth = ref(false);
 
@@ -518,6 +531,7 @@ async function loadGatewaySettings() {
       gatewaySettings.requireAuth = !!data.requireAuth;
       gatewaySettings.authToken = data.authToken || '';
       gatewaySettings.loadBalancingStrategy = data.loadBalancingStrategy || 'priority';
+      gatewaySettings.stripEncryptedContent = data.stripEncryptedContent !== undefined ? !!data.stripEncryptedContent : true;
     }
   } catch (err) {
     console.error('获取网关鉴权配置失败:', err);
@@ -550,9 +564,10 @@ async function saveAuthSettings() {
     await api.saveGatewaySettings({
       requireAuth: gatewaySettings.requireAuth,
       authToken: gatewaySettings.authToken.trim(),
-      loadBalancingStrategy: gatewaySettings.loadBalancingStrategy || 'priority'
+      loadBalancingStrategy: gatewaySettings.loadBalancingStrategy || 'priority',
+      stripEncryptedContent: !!gatewaySettings.stripEncryptedContent
     });
-    emit('toast', '🔒 网关全局安全与分流调度配置已保存！', 'success');
+    emit('toast', '🔒 网关全局设置已保存并即时生效！', 'success');
   } catch (err) {
     emit('toast', `保存全局设置失败: ${err.message}`, 'error');
   } finally {

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelFailoverGateway.Models;
 
 namespace ModelFailoverGateway.Services;
@@ -27,6 +28,8 @@ public class ProxyEngine : IProxyEngine
         "Host", "Connection", "Keep-Alive", "Transfer-Encoding", "Upgrade", "Proxy-Connection", "Proxy-Authenticate", "Proxy-Authorization"
     };
 
+    private static readonly byte[] EncryptedContentBytes = Encoding.UTF8.GetBytes("encrypted_content");
+
     public ProxyEngine(
         IChannelService channelService,
         ILogService logService,
@@ -43,6 +46,24 @@ public class ProxyEngine : IProxyEngine
         _httpClientFactory = httpClientFactory;
         _env = env;
         _logger = logger;
+    }
+
+    private GatewaySettings GetGatewaySettings()
+    {
+        try
+        {
+            var dataDir = Path.Combine(_env.ContentRootPath, "data");
+            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
+            if (File.Exists(settingsPath))
+            {
+                var json = File.ReadAllText(settingsPath);
+                var settings = JsonSerializer.Deserialize<GatewaySettings>(json);
+                if (settings != null) return settings;
+            }
+        }
+        catch { }
+
+        return new GatewaySettings();
     }
 
     private HttpClient GetProxyClient(string? proxyUrl)
@@ -64,49 +85,35 @@ public class ProxyEngine : IProxyEngine
         });
     }
 
-    private bool IsGatewayAuthRequired(HttpContext context, out string error)
+    private bool IsGatewayAuthRequired(HttpContext context, GatewaySettings settings, out string error)
     {
         error = string.Empty;
-        try
+        if (settings.RequireAuth && !string.IsNullOrWhiteSpace(settings.AuthToken))
         {
-            var dataDir = Path.Combine(_env.ContentRootPath, "data");
-            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
-            if (File.Exists(settingsPath))
+            // 检查客户端请求头：Authorization: Bearer <Token> 或 x-api-key: <Token>
+            var clientToken = "";
+            if (context.Request.Headers.TryGetValue("Authorization", out var authHeader))
             {
-                var json = File.ReadAllText(settingsPath);
-                var settings = JsonSerializer.Deserialize<GatewaySettings>(json);
-                if (settings != null && settings.RequireAuth && !string.IsNullOrWhiteSpace(settings.AuthToken))
+                var str = authHeader.ToString().Trim();
+                if (str.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 {
-                    // 检查客户端请求头：Authorization: Bearer <Token> 或 x-api-key: <Token>
-                    var clientToken = "";
-                    if (context.Request.Headers.TryGetValue("Authorization", out var authHeader))
-                    {
-                        var str = authHeader.ToString().Trim();
-                        if (str.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            clientToken = str["Bearer ".Length..].Trim();
-                        }
-                        else
-                        {
-                            clientToken = str;
-                        }
-                    }
-                    else if (context.Request.Headers.TryGetValue("x-api-key", out var keyHeader))
-                    {
-                        clientToken = keyHeader.ToString().Trim();
-                    }
-
-                    if (!string.Equals(clientToken, settings.AuthToken.Trim(), StringComparison.Ordinal))
-                    {
-                        error = "网关已启用安全访问鉴权，请在客户端配置有效的 Gateway Token (Authorization: Bearer <Token> 或 x-api-key: <Token>)";
-                        return true;
-                    }
+                    clientToken = str["Bearer ".Length..].Trim();
+                }
+                else
+                {
+                    clientToken = str;
                 }
             }
-        }
-        catch
-        {
-            // 忽略读取异常
+            else if (context.Request.Headers.TryGetValue("x-api-key", out var keyHeader))
+            {
+                clientToken = keyHeader.ToString().Trim();
+            }
+
+            if (!string.Equals(clientToken, settings.AuthToken.Trim(), StringComparison.Ordinal))
+            {
+                error = "网关已启用安全访问鉴权，请在客户端配置有效的 Gateway Token (Authorization: Bearer <Token> 或 x-api-key: <Token>)";
+                return true;
+            }
         }
 
         return false;
@@ -114,37 +121,150 @@ public class ProxyEngine : IProxyEngine
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _roundRobinIndices = new();
 
-    private List<Channel> ApplyLoadBalancingStrategy(List<Channel> channels, string group)
+    private List<Channel> ApplyLoadBalancingStrategy(List<Channel> channels, string group, GatewaySettings settings)
     {
         if (channels.Count <= 1) return channels;
 
-        try
+        var strategy = (settings.LoadBalancingStrategy ?? "priority").ToLowerInvariant();
+        if (strategy == "round_robin")
         {
-            var dataDir = Path.Combine(_env.ContentRootPath, "data");
-            var settingsPath = Path.Combine(dataDir, "gateway_settings.json");
-            if (File.Exists(settingsPath))
-            {
-                var json = File.ReadAllText(settingsPath);
-                var settings = JsonSerializer.Deserialize<GatewaySettings>(json);
-                if (settings != null)
-                {
-                    var strategy = (settings.LoadBalancingStrategy ?? "priority").ToLowerInvariant();
-                    if (strategy == "round_robin")
-                    {
-                        var idx = _roundRobinIndices.AddOrUpdate(group, 0, (_, v) => (v + 1) % channels.Count);
-                        return channels.Skip(idx).Concat(channels.Take(idx)).ToList();
-                    }
-                    if (strategy == "random")
-                    {
-                        return channels.OrderBy(_ => Random.Shared.Next()).ToList();
-                    }
-                }
-            }
+            var idx = _roundRobinIndices.AddOrUpdate(group, 0, (_, v) => (v + 1) % channels.Count);
+            return channels.Skip(idx).Concat(channels.Take(idx)).ToList();
         }
-        catch { }
+        if (strategy == "random")
+        {
+            return channels.OrderBy(_ => Random.Shared.Next()).ToList();
+        }
 
         return channels; // 默认 priority 模式 (已按 Priority 升序排序)
     }
+
+    /// <summary>
+    /// 自动检测并剔除请求体中的加密推理数据（如 encrypted_content 与包含该字段的 reasoning 项），
+    /// 彻底避免跨渠道轮询、多Key容灾或第三方多账号池中转时触发 invalid_encrypted_content 报错
+    /// </summary>
+    private byte[] SanitizeEncryptedContent(byte[] rawRequestBody, out bool isSanitized)
+    {
+        isSanitized = false;
+        if (rawRequestBody == null || rawRequestBody.Length == 0) return rawRequestBody ?? Array.Empty<byte>();
+
+        // 快速预检：若字节流中完全不含 "encrypted_content"，直接零开销放行
+        if (rawRequestBody.AsSpan().IndexOf(EncryptedContentBytes) < 0)
+        {
+            return rawRequestBody;
+        }
+
+        try
+        {
+            var node = JsonNode.Parse(rawRequestBody);
+            if (node is not JsonObject rootObj)
+            {
+                return rawRequestBody;
+            }
+
+            bool modified = CleanEncryptedContentRecursively(rootObj);
+
+            // 检查顶层 include 数组中是否包含 reasoning.encrypted_content
+            if (rootObj.TryGetPropertyValue("include", out var includeNode) && includeNode is JsonArray includeArray)
+            {
+                for (int i = includeArray.Count - 1; i >= 0; i--)
+                {
+                    var itemStr = includeArray[i]?.ToString();
+                    if (itemStr != null && itemStr.Contains("encrypted_content", StringComparison.OrdinalIgnoreCase))
+                    {
+                        includeArray.RemoveAt(i);
+                        modified = true;
+                    }
+                }
+            }
+
+            if (modified)
+            {
+                isSanitized = true;
+                using var ms = new MemoryStream();
+                using (var writer = new Utf8JsonWriter(ms))
+                {
+                    rootObj.WriteTo(writer);
+                }
+                return ms.ToArray();
+            }
+
+            return rawRequestBody;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "尝试清洗请求中的加密推理数据时发生异常，已降级使用原始请求体");
+            return rawRequestBody;
+        }
+    }
+
+    /// <summary>
+    /// 递归遍历 JSON 节点，剔除包含 encrypted_content 的数组项与对象属性
+    /// </summary>
+    private static bool CleanEncryptedContentRecursively(JsonNode? node)
+    {
+        if (node == null) return false;
+        bool modified = false;
+
+        if (node is JsonObject obj)
+        {
+            var propertiesToRemove = new List<string>();
+            foreach (var kvp in obj)
+            {
+                if (kvp.Key.Equals("encrypted_content", StringComparison.OrdinalIgnoreCase))
+                {
+                    propertiesToRemove.Add(kvp.Key);
+                }
+                else
+                {
+                    if (CleanEncryptedContentRecursively(kvp.Value))
+                    {
+                        modified = true;
+                    }
+                }
+            }
+
+            foreach (var prop in propertiesToRemove)
+            {
+                obj.Remove(prop);
+                modified = true;
+            }
+        }
+        else if (node is JsonArray arr)
+        {
+            for (int i = arr.Count - 1; i >= 0; i--)
+            {
+                var item = arr[i];
+                if (item is JsonObject itemObj)
+                {
+                    // 若数组项是 reasoning 类型或包含 encrypted_content 属性，直接从数组中移除该推理节点
+                    bool isReasoningItem = false;
+                    if (itemObj.TryGetPropertyValue("type", out var typeVal) &&
+                        typeVal?.ToString().Equals("reasoning", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        isReasoningItem = true;
+                    }
+
+                    bool hasEncryptedContent = itemObj.ContainsKey("encrypted_content");
+
+                    if (hasEncryptedContent || (isReasoningItem && itemObj.ContainsKey("encrypted_content")))
+                    {
+                        arr.RemoveAt(i);
+                        modified = true;
+                        continue;
+                    }
+                }
+
+                if (CleanEncryptedContentRecursively(item))
+                {
+                    modified = true;
+                }
+            }
+        }
+
+        return modified;
+    }
+
 
     public async Task ForwardRequestAsync(HttpContext context)
     {
@@ -206,8 +326,9 @@ public class ProxyEngine : IProxyEngine
             }
         }
 
-        // 0. 校验网关安全访问鉴权 (如果开启了 RequireAuth)
-        if (IsGatewayAuthRequired(context, out var authError))
+        // 0. 获取网关全局设置并校验网关安全访问鉴权 (如果开启了 RequireAuth)
+        var gatewaySettings = GetGatewaySettings();
+        if (IsGatewayAuthRequired(context, gatewaySettings, out var authError))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.ContentType = "application/json";
@@ -230,6 +351,17 @@ public class ProxyEngine : IProxyEngine
         using var memoryStream = new MemoryStream();
         await context.Request.Body.CopyToAsync(memoryStream);
         var rawRequestBody = memoryStream.ToArray();
+
+        // 1.1 自动剔除请求体中的加密推理数据（encrypted_content），避免跨渠道/跨账号报 invalid_encrypted_content
+        if (gatewaySettings.StripEncryptedContent && rawRequestBody.Length > 0)
+        {
+            var sanitizedBody = SanitizeEncryptedContent(rawRequestBody, out var wasSanitized);
+            if (wasSanitized)
+            {
+                _logger.LogInformation("已自动剔除请求体中携带的加密推理数据 (encrypted_content)，保障跨渠道与中转环境兼容性");
+                rawRequestBody = sanitizedBody;
+            }
+        }
 
         // 采集客户端安全请求头（脱敏敏感鉴权字段）用于日志排查与渠道嗅探提取
         var clientHeadersForLog = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -286,7 +418,7 @@ public class ProxyEngine : IProxyEngine
         }
 
         // 应用全局负载均衡分流策略（轮询 / 随机 / 优先级）
-        activeChannels = ApplyLoadBalancingStrategy(activeChannels, requestedGroup);
+        activeChannels = ApplyLoadBalancingStrategy(activeChannels, requestedGroup, gatewaySettings);
 
         if (!activeChannels.Any())
         {
@@ -603,6 +735,8 @@ public class ProxyEngine : IProxyEngine
                 lower.Contains("rate_limit") ||
                 lower.Contains("overloaded") ||
                 lower.Contains("exceeded") ||
+                lower.Contains("invalid_encrypted_content") ||
+                lower.Contains("encrypted content") ||
                 lower.Contains("欠费") ||
                 lower.Contains("额度不足") ||
                 lower.Contains("余额不足") ||
