@@ -993,7 +993,7 @@ onUnmounted(() => {
   padding: 6px 28px 6px 30px;
   font-size: 12px;
   width: 260px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-main);
@@ -1089,7 +1089,7 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-surface-elevated);
 }
 
 .data-row {
@@ -1227,7 +1227,7 @@ onUnmounted(() => {
 /* 展开抽屉面板 */
 .inspector-row td {
   padding: 0;
-  background: #060913;
+  background: var(--bg-surface);
 }
 
 .inspector-panel {
@@ -1239,7 +1239,7 @@ onUnmounted(() => {
 
 .inspector-tabs {
   display: flex;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-surface-elevated);
   border-bottom: 1px solid var(--border-subtle);
   padding: 4px 10px 0;
   gap: 4px;
@@ -1265,7 +1265,7 @@ onUnmounted(() => {
 }
 
 .inspector-tab.active {
-  color: #818cf8;
+  color: var(--accent-primary);
   border-bottom-color: var(--accent-primary);
   background: rgba(99, 102, 241, 0.08);
 }
@@ -1305,7 +1305,7 @@ onUnmounted(() => {
 }
 
 .code-viewer {
-  background: #03060c;
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 12px 14px;
@@ -1313,7 +1313,7 @@ onUnmounted(() => {
   overflow: auto;
   font-size: 12px;
   line-height: 1.6;
-  color: #cbd5e1;
+  color: var(--text-main);
 }
 
 .code-viewer pre {
@@ -1349,7 +1349,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 6px;
-  background: #03060c;
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 12px;
@@ -1530,7 +1530,7 @@ onUnmounted(() => {
 }
 
 .terminal-screen {
-  background: #060913;
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 16px;
@@ -1720,5 +1720,194 @@ input:checked + .slider {
 
 input:checked + .slider:before {
   transform: translateX(18px);
+}
+
+/* ================= 浅色模式专属视觉精修 ================= */
+:global(body.light) .mode-tab-btn {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+:global(body.light) .mode-tab-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+:global(body.light) .mode-tab-btn.active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.08);
+}
+
+:global(body.light) .tab-badge-num {
+  background: rgba(0, 0, 0, 0.06);
+  color: #334155;
+}
+
+:global(body.light) .mode-tab-btn.active .tab-badge-num {
+  background: #4338ca;
+  color: #ffffff;
+}
+
+:global(body.light) .status-tab-btn {
+  color: #64748b;
+}
+
+:global(body.light) .status-tab-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+:global(body.light) .status-tab-btn.active {
+  background: #4f46e5;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+}
+
+:global(body.light) .search-field {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+:global(body.light) .search-field::placeholder {
+  color: #94a3b8 !important;
+}
+
+:global(body.light) .search-field:focus {
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12) !important;
+}
+
+:global(body.light) .data-table th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+:global(body.light) .data-row:hover {
+  background-color: #f8fafc;
+}
+
+:global(body.light) .data-row.is-expanded {
+  background-color: #eff6ff;
+}
+
+:global(body.light) .method-tag {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+:global(body.light) .model-pill {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+:global(body.light) .inspector-row td {
+  background: #f8fafc;
+}
+
+:global(body.light) .inspector-panel {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+:global(body.light) .inspector-tabs {
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+:global(body.light) .inspector-tab {
+  color: #64748b;
+}
+
+:global(body.light) .inspector-tab:hover {
+  color: #0f172a;
+}
+
+:global(body.light) .inspector-tab.active {
+  color: #4338ca;
+  background: #ffffff;
+  border-bottom-color: #4f46e5;
+}
+
+:global(body.light) .code-viewer {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+:global(body.light) .headers-list-grid {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .h-key {
+  color: #4f46e5;
+}
+
+:global(body.light) .h-val {
+  color: #334155;
+}
+
+:global(body.light) .error-diag-card {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+:global(body.light) .diag-content {
+  color: #b91c1c;
+}
+
+:global(body.light) .terminal-screen {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+:global(body.light) .t-time {
+  color: #64748b;
+}
+
+:global(body.light) .t-cat {
+  color: #4f46e5;
+}
+
+:global(body.light) .t-msg {
+  color: #0f172a;
+}
+
+:global(body.light) .level-error .t-msg {
+  color: #b91c1c;
+}
+
+:global(body.light) .t-exc {
+  background: #fff1f2;
+  border-color: #e11d48;
+  color: #9f1239;
+}
+
+:global(body.light) .modal-overlay {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+:global(body.light) .modal-container {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+:global(body.light) .slider {
+  background-color: #cbd5e1;
+}
+
+:global(body.light) .slider:before {
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 </style>

@@ -932,7 +932,7 @@ onMounted(() => {
 
 .data-table th {
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-surface-elevated);
   color: var(--text-muted);
   font-weight: 600;
   border-bottom: 1px solid var(--border-subtle);
@@ -1058,5 +1058,20 @@ onMounted(() => {
 .btn-primary-outline:hover {
   background: var(--primary);
   color: #fff;
+}
+
+/* ================= 浅色模式专属精修 ================= */
+:global(body.light) .data-table th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+:global(body.light) .data-table td {
+  border-bottom-color: #f1f5f9;
+}
+
+:global(body.light) .data-row:hover {
+  background: #f8fafc;
 }
 </style>

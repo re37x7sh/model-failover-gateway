@@ -263,7 +263,7 @@ async function copyText(text, successMsg) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   padding: 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
@@ -299,12 +299,12 @@ async function copyText(text, successMsg) {
 }
 
 .code-block {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--bg-surface-elevated);
   padding: 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   font-size: 12px;
-  color: #a5b4fc;
+  color: var(--accent-primary);
   overflow-x: auto;
   line-height: 1.6;
 }
@@ -313,5 +313,17 @@ async function copyText(text, successMsg) {
   position: absolute;
   top: 10px;
   right: 10px;
+}
+
+/* ================= 浅色模式专属精修 ================= */
+:global(body.light) .config-table {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .code-block {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #3730a3;
 }
 </style>

@@ -280,7 +280,7 @@ defineEmits(['navigate']);
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
@@ -314,5 +314,16 @@ defineEmits(['navigate']);
 
 .activity-duration {
   font-family: var(--font-mono);
+}
+
+/* ================= 浅色模式专属精修 ================= */
+:global(body.light) .banner-card {
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  border-color: #c7d2fe;
+}
+
+:global(body.light) .activity-item {
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
 </style>

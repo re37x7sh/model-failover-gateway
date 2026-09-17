@@ -870,7 +870,7 @@ onUnmounted(() => {
 
 .client-card {
   padding: 16px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   display: flex;
@@ -924,7 +924,7 @@ onUnmounted(() => {
 /* 端口设置区 */
 .port-config-section {
   padding: 16px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   display: flex;
@@ -948,7 +948,7 @@ onUnmounted(() => {
 .port-input-wrapper {
   display: flex;
   align-items: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 2px 8px;
@@ -979,7 +979,7 @@ onUnmounted(() => {
 /* 网关安全鉴权设置区 */
 .auth-config-section {
   padding: 16px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   display: flex;
@@ -991,10 +991,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-surface);
   padding: 12px;
   border-radius: var(--radius-sm);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: 1px dashed var(--border-medium);
 }
 
 .token-input-row {
@@ -1011,7 +1011,7 @@ onUnmounted(() => {
 }
 
 .auth-tip code {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-hover);
   padding: 2px 6px;
   border-radius: 4px;
   color: var(--accent-primary);
@@ -1053,7 +1053,7 @@ onUnmounted(() => {
 .filter-pills {
   display: flex;
   gap: 4px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-surface-elevated);
   padding: 2px;
   border-radius: 4px;
 }
@@ -1279,5 +1279,48 @@ onUnmounted(() => {
   border-color: var(--accent-primary);
   color: var(--text-main);
   box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ================= 浅色模式专属精修 ================= */
+:global(body.light) .client-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .port-config-section,
+:global(body.light) .auth-config-section {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .port-input-wrapper,
+:global(body.light) .auth-token-form {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+:global(body.light) .filter-pills {
+  background: #f1f5f9;
+}
+
+:global(body.light) .pill-btn {
+  color: #64748b;
+}
+
+:global(body.light) .pill-btn.active {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+:global(body.light) .avatar-opt {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+:global(body.light) .avatar-opt.active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
 }
 </style>

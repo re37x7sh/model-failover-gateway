@@ -461,4 +461,36 @@ onMounted(() => {
   overflow: hidden;
   background: transparent;
 }
+
+/* ================= 浅色模式专属 Topbar 精修 ================= */
+:global(body.light) .top-nav-bar {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .status-summary-pill {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:global(body.light) .primary-channel-pill {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+:global(body.light) .pill-channel-name {
+  color: #4338ca;
+  font-weight: 600;
+}
+
+:global(body.light) .topbar-collapse-btn {
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+:global(body.light) .topbar-collapse-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
 </style>

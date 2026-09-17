@@ -513,7 +513,7 @@ async function sendMessage() {
 .select-input {
   padding: 4px 10px;
   font-size: 13px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-surface-elevated);
   color: var(--text-main);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -766,7 +766,7 @@ async function sendMessage() {
 }
 
 .markdown-body :deep(pre) {
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
@@ -826,7 +826,7 @@ async function sendMessage() {
 
 .chat-input-area {
   padding: 14px 18px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
@@ -896,7 +896,7 @@ async function sendMessage() {
 }
 
 .kpi-box {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 10px;
@@ -917,7 +917,7 @@ async function sendMessage() {
 }
 
 .diagnostic-group {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px;
@@ -959,7 +959,7 @@ async function sendMessage() {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface);
   padding: 6px 8px;
   border-radius: 4px;
 }
@@ -993,13 +993,53 @@ async function sendMessage() {
 }
 
 .json-code {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 8px;
   font-size: 11px;
   max-height: 200px;
   overflow-y: auto;
-  color: #a5b4fc;
+  color: var(--accent-primary);
+}
+
+/* ================= 浅色模式专属精修 ================= */
+:global(body.light) .select-input {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+:global(body.light) .chat-input-area {
+  background: #ffffff;
+  border-top-color: #e2e8f0;
+}
+
+:global(body.light) .chat-textarea {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+:global(body.light) .kpi-box,
+:global(body.light) .diagnostic-group,
+:global(body.light) .diag-mini-item {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .markdown-body :deep(pre) {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .markdown-body :deep(pre code) {
+  color: #1e293b;
+}
+
+:global(body.light) .json-code {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #3730a3;
 }
 </style>

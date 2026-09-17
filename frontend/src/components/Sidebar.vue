@@ -665,7 +665,7 @@ const devTabs = computed(() => [
 }
 
 .pop-item {
-  background: rgba(0,0,0,0.25);
+  background: var(--bg-surface-elevated);
   padding: 6px 8px;
   border-radius: var(--radius-sm);
   font-size: 11px;
@@ -692,5 +692,59 @@ const devTabs = computed(() => [
 
 .pop-reason {
   color: var(--text-muted);
+}
+
+/* ================= 浅色模式专属侧边栏精修 ================= */
+:global(body.light) .status-port {
+  color: #475569;
+  font-weight: 600;
+}
+
+:global(body.light) .nav-section-title {
+  color: #64748b;
+  font-weight: 700;
+}
+
+:global(body.light) .nav-item {
+  color: #475569;
+}
+
+:global(body.light) .nav-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+:global(body.light) .nav-item.active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.08);
+}
+
+:global(body.light) .collapse-toggle-btn {
+  color: #64748b;
+}
+
+:global(body.light) .collapse-toggle-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+:global(body.light) .action-btn {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+:global(body.light) .action-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+:global(body.light) .pop-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 </style>

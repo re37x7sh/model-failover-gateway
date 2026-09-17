@@ -974,7 +974,7 @@ async function confirmDelete(channel) {
 .filter-tabs {
   display: flex;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface-elevated);
   padding: 4px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
@@ -995,6 +995,11 @@ async function confirmDelete(channel) {
   transition: all 0.15s;
 }
 
+.filter-tab-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card-hover);
+}
+
 .filter-tab-btn.active {
   background: var(--accent-primary);
   color: #fff;
@@ -1003,10 +1008,16 @@ async function confirmDelete(channel) {
 }
 
 .tab-count-badge {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--border-medium);
+  color: var(--text-main);
   padding: 1px 6px;
   border-radius: var(--radius-full);
   font-size: 11px;
+}
+
+.filter-tab-btn.active .tab-count-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
 }
 
 .empty-card {
@@ -1400,9 +1411,9 @@ async function confirmDelete(channel) {
 }
 
 .highlight-url {
-  color: #818cf8 !important;
+  color: #818cf8;
   font-weight: 700;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.3);
   padding: 3px 8px;
 }
@@ -1427,5 +1438,99 @@ async function confirmDelete(channel) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ================= 浅色模式专属视觉精修 ================= */
+:global(body.light) .filter-tabs {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+:global(body.light) .filter-tab-btn {
+  color: #64748b;
+}
+
+:global(body.light) .filter-tab-btn:hover {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+:global(body.light) .filter-tab-btn.active {
+  background: #4f46e5;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+:global(body.light) .tab-count-badge {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+:global(body.light) .filter-tab-btn.active .tab-count-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+:global(body.light) .client-endpoint-highlight {
+  background: #f5f7ff;
+  border-color: #c7d2fe;
+}
+
+:global(body.light) .endpoint-label {
+  color: #4338ca !important;
+}
+
+:global(body.light) .highlight-url {
+  color: #3730a3 !important;
+  background: #ffffff !important;
+  border: 1px solid #c7d2fe !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+:global(body.light) .priority-badge {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+:global(body.light) .priority-num {
+  color: #4f46e5;
+}
+
+:global(body.light) .priority-label {
+  color: #6b7280;
+}
+
+:global(body.light) .arrow-btn {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+:global(body.light) .arrow-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+:global(body.light) .channel-card.primary {
+  border-color: #c7d2fe;
+  background: linear-gradient(135deg, #f5f7ff, #ffffff);
+}
+
+:global(body.light) .icon-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:global(body.light) .group-endpoint-preview {
+  background: #f8fafc;
+  border-color: #c7d2fe;
+}
+
+:global(body.light) .modal-overlay {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+:global(body.light) .modal-container {
+  background: #ffffff;
+  border-color: #e2e8f0;
 }
 </style>
